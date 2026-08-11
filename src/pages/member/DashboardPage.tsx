@@ -3,26 +3,19 @@
 // ============================================
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  DollarSign,
-  TrendingDown,
-  Wallet,
-  BarChart3,
-  PlusCircle,
-  Receipt,
-  ArrowRight,
-} from 'lucide-react';
+import { Wallet, ArrowRight } from 'lucide-react';
 import { api, formatCurrency, formatDate, formatMonthYear } from '../../lib/api';
+import { getDemoMemberDashboard } from '../../lib/demoData';
 import type { MemberDashboardStats, Expense } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
-import { useToast } from '../../contexts/ToastContext';
+import AddExpenseDialog from '../../components/expenses/AddExpenseDialog';
 
 export default function MemberDashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const toast = useToast();
   const [stats, setStats] = useState<MemberDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showAddExpense, setShowAddExpense] = useState(false);
 
   useEffect(() => {
     fetchDashboard();
@@ -34,23 +27,7 @@ export default function MemberDashboardPage() {
     if (res.success && res.data) {
       setStats(res.data);
     } else {
-      setStats({
-        current_month: '2026-08',
-        total_collected: 5000,
-        total_spent: 3200,
-        balance: 1800,
-        daily_average: 106.67,
-        total_members: 10,
-        paid_members: 8,
-        unpaid_members: 2,
-        my_total_expenses: 470,
-        my_expense_count: 3,
-        recent_expenses: [
-          { id: 1, month_id: 1, created_by: user?.id || 1, amount: 120, date: '2026-08-11', description: 'Vegetables and groceries', category_id: 1, category_name: 'Groceries', creator_name: user?.name || 'Mohamed Ibrahim', created_at: '', updated_at: '' },
-          { id: 4, month_id: 1, created_by: user?.id || 1, amount: 250, date: '2026-08-05', description: 'Supermarket supplies', category_id: 1, category_name: 'Groceries', creator_name: user?.name || 'Mohamed Ibrahim', created_at: '', updated_at: '' },
-          { id: 5, month_id: 1, created_by: user?.id || 1, amount: 100, date: '2026-08-01', description: 'Rice and oil', category_id: 4, category_name: 'Rice', creator_name: user?.name || 'Mohamed Ibrahim', created_at: '', updated_at: '' },
-        ]
-      });
+      setStats(getDemoMemberDashboard(user?.id || 1, user?.name || 'Mohamed Ibrahim'));
     }
     setLoading(false);
   };
@@ -85,8 +62,7 @@ export default function MemberDashboardPage() {
           </p>
         </div>
         <div className="page-header-right">
-          <button className="btn btn-primary" onClick={() => navigate('/member/add-expense')}>
-            <PlusCircle size={16} />
+          <button className="btn btn-primary" onClick={() => setShowAddExpense(true)}>
             Add Expense
           </button>
         </div>
@@ -104,12 +80,10 @@ export default function MemberDashboardPage() {
         </div>
       ) : (
         <>
-          {/* Overall Stats */}
           <div className="grid grid-cols-4 gap-4 mb-6">
             <div className="stat-card animate-fade-in delay-1">
               <div className="stat-card-header">
                 <span className="stat-card-label">Total Collected</span>
-                <div className="stat-card-icon"><DollarSign size={16} /></div>
               </div>
               <div className="stat-card-value">{formatCurrency(stats.total_collected)}</div>
               <div className="stat-card-change text-muted">{stats.total_members} members</div>
@@ -118,7 +92,6 @@ export default function MemberDashboardPage() {
             <div className="stat-card animate-fade-in delay-2">
               <div className="stat-card-header">
                 <span className="stat-card-label">Total Spent</span>
-                <div className="stat-card-icon"><TrendingDown size={16} /></div>
               </div>
               <div className="stat-card-value">{formatCurrency(stats.total_spent)}</div>
             </div>
@@ -126,7 +99,6 @@ export default function MemberDashboardPage() {
             <div className="stat-card animate-fade-in delay-3">
               <div className="stat-card-header">
                 <span className="stat-card-label">Balance</span>
-                <div className="stat-card-icon"><Wallet size={16} /></div>
               </div>
               <div className="stat-card-value">
                 <span className={stats.balance >= 0 ? '' : 'amount-negative'}>
@@ -138,34 +110,11 @@ export default function MemberDashboardPage() {
             <div className="stat-card animate-fade-in delay-4">
               <div className="stat-card-header">
                 <span className="stat-card-label">Daily Average</span>
-                <div className="stat-card-icon"><BarChart3 size={16} /></div>
               </div>
               <div className="stat-card-value">{formatCurrency(stats.daily_average)}</div>
             </div>
           </div>
 
-          {/* My Stats */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="stat-card animate-fade-in delay-5" style={{ borderLeft: '3px solid var(--primary)' }}>
-              <div className="stat-card-header">
-                <span className="stat-card-label">My Total Expenses</span>
-                <div className="stat-card-icon"><Receipt size={16} /></div>
-              </div>
-              <div className="stat-card-value">{formatCurrency(stats.my_total_expenses)}</div>
-              <div className="stat-card-change text-muted">{stats.my_expense_count} entries</div>
-            </div>
-
-            <div className="stat-card animate-fade-in delay-6" style={{ borderLeft: '3px solid var(--primary)' }}>
-              <div className="stat-card-header">
-                <span className="stat-card-label">Paid Members</span>
-                <div className="stat-card-icon"><DollarSign size={16} /></div>
-              </div>
-              <div className="stat-card-value">{stats.paid_members}/{stats.total_members}</div>
-              <div className="stat-card-change text-muted">{stats.unpaid_members} unpaid</div>
-            </div>
-          </div>
-
-          {/* Recent Expenses */}
           <div className="card animate-fade-in">
             <div className="card-header">
               <div>
@@ -183,9 +132,8 @@ export default function MemberDashboardPage() {
                   <button
                     className="btn btn-primary btn-sm"
                     style={{ marginTop: '0.75rem' }}
-                    onClick={() => navigate('/member/add-expense')}
+                    onClick={() => setShowAddExpense(true)}
                   >
-                    <PlusCircle size={14} />
                     Add Your First Expense
                   </button>
                 </div>
@@ -199,7 +147,7 @@ export default function MemberDashboardPage() {
                     <div>
                       <div className="text-sm font-medium">{expense.description || 'No description'}</div>
                       <div className="text-xs text-muted">
-                        {expense.category_name} · {formatDate(expense.date)}
+                        {formatDate(expense.date)}
                       </div>
                     </div>
                     <span className="amount">{formatCurrency(expense.amount)}</span>
@@ -210,6 +158,14 @@ export default function MemberDashboardPage() {
           </div>
         </>
       )}
+
+      <AddExpenseDialog
+        open={showAddExpense}
+        onClose={() => setShowAddExpense(false)}
+        onSuccess={fetchDashboard}
+        mode="member"
+        defaultMemberId={user?.id}
+      />
     </div>
   );
 }

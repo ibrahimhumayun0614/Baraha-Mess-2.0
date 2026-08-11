@@ -11,7 +11,6 @@ import MonthsPage from './pages/admin/MonthsPage';
 import ExpensesPage from './pages/admin/ExpensesPage';
 import ActivityLogsPage from './pages/admin/ActivityLogsPage';
 import MemberDashboardPage from './pages/member/DashboardPage';
-import AddExpensePage from './pages/member/AddExpensePage';
 import MyExpensesPage from './pages/member/MyExpensesPage';
 
 function ProtectedRoute({ children, requiredType }: { children: React.ReactNode; requiredType?: 'admin' | 'member' }) {
@@ -68,7 +67,7 @@ export default function App() {
         }
       >
         <Route index element={<MemberDashboardPage />} />
-        <Route path="add-expense" element={<AddExpensePage />} />
+        <Route path="add-expense" element={<Navigate to="/member" replace />} />
         <Route path="expenses" element={<MyExpensesPage />} />
       </Route>
 

@@ -17,8 +17,10 @@ import {
   Receipt,
 } from 'lucide-react';
 import { api, formatCurrency, formatDate, formatMonthYear } from '../../lib/api';
+import { DEMO_DASHBOARD, DEMO_MONTH_MEMBERS } from '../../lib/demoData';
 import type { DashboardStats, Expense, MonthMember } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
+import AddExpenseDialog from '../../components/expenses/AddExpenseDialog';
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
@@ -26,6 +28,7 @@ export default function AdminDashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [members, setMembers] = useState<MonthMember[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddExpense, setShowAddExpense] = useState(false);
 
   useEffect(() => {
     fetchDashboard();
@@ -37,33 +40,14 @@ export default function AdminDashboardPage() {
     if (res.success && res.data) {
       setStats(res.data);
     } else {
-      // Mock stats for preview mode
-      setStats({
-        current_month: '2026-08',
-        total_collected: 5000,
-        total_spent: 3200,
-        balance: 1800,
-        daily_average: 106.67,
-        total_members: 10,
-        paid_members: 8,
-        unpaid_members: 2,
-        recent_expenses: [
-          { id: 1, month_id: 1, created_by: 1, amount: 120, date: '2026-08-11', description: 'Vegetables & Groceries', category_id: 1, category_name: 'Groceries', creator_name: 'Mohamed Ibrahim', created_at: '', updated_at: '' },
-          { id: 2, month_id: 1, created_by: 2, amount: 350, date: '2026-08-10', description: 'Fresh Meat & Chicken', category_id: 3, category_name: 'Meat', creator_name: 'Humayun Kabir', created_at: '', updated_at: '' },
-          { id: 3, month_id: 1, created_by: 3, amount: 80, date: '2026-08-09', description: 'Cooking Gas Cylinder', category_id: 5, category_name: 'Gas', creator_name: 'Rashid Ali', created_at: '', updated_at: '' }
-        ]
-      });
+      setStats(DEMO_DASHBOARD);
     }
 
     const membersRes = await api.get<MonthMember[]>('/dashboard/members');
     if (membersRes.success && membersRes.data && membersRes.data.length > 0) {
       setMembers(membersRes.data);
     } else {
-      setMembers([
-        { id: 1, month_id: 1, member_id: 1, contribution_amount: 500, payment_status: 'paid', amount_paid: 500, created_at: '', member_name: 'Mohamed Ibrahim', member_member_id: 'MEM-001' },
-        { id: 2, month_id: 1, member_id: 2, contribution_amount: 500, payment_status: 'paid', amount_paid: 500, created_at: '', member_name: 'Humayun Kabir', member_member_id: 'MEM-002' },
-        { id: 3, month_id: 1, member_id: 3, contribution_amount: 500, payment_status: 'unpaid', amount_paid: 0, created_at: '', member_name: 'Rashid Ali', member_member_id: 'MEM-003' },
-      ]);
+      setMembers(DEMO_MONTH_MEMBERS);
     }
     setLoading(false);
   };
@@ -103,11 +87,12 @@ export default function AdminDashboardPage() {
         </div>
         <div className="page-header-right">
           <button className="btn btn-outline" onClick={() => navigate('/admin/months')}>
-            <Calendar size={16} />
             Manage Months
           </button>
+          <button className="btn btn-outline" onClick={() => setShowAddExpense(true)}>
+            Add Expense
+          </button>
           <button className="btn btn-primary" onClick={() => navigate('/admin/members')}>
-            <Plus size={16} />
             Add Member
           </button>
         </div>
@@ -227,7 +212,7 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* Members Payment Status & Recent Expenses */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col gap-4">
             {/* Members Table */}
             <div className="card animate-fade-in">
               <div className="card-header">
@@ -314,7 +299,7 @@ export default function AdminDashboardPage() {
                         <div>
                           <div className="text-sm font-medium">{expense.description || 'No description'}</div>
                           <div className="text-xs text-muted">
-                            {expense.creator_name} · {expense.category_name} · {formatDate(expense.date)}
+                            {expense.creator_name} · {formatDate(expense.date)}
                           </div>
                         </div>
                       </div>
@@ -327,6 +312,12 @@ export default function AdminDashboardPage() {
           </div>
         </>
       )}
+
+      <AddExpenseDialog
+        open={showAddExpense}
+        onClose={() => setShowAddExpense(false)}
+        onSuccess={fetchDashboard}
+      />
     </div>
   );
 }

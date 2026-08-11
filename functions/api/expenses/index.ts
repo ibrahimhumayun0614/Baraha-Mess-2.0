@@ -19,6 +19,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const createdBy = params.get('created_by') || '';
   const dateFrom = params.get('date_from') || '';
   const dateTo = params.get('date_to') || '';
+  const monthId = params.get('month_id') || '';
   const page = parseInt(params.get('page') || '1');
   const limit = parseInt(params.get('limit') || '20');
   const sortBy = params.get('sort_by') || 'date';
@@ -58,11 +59,18 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     binds.push(dateTo);
   }
 
-  // Get active month expenses by default
-  const activeMonth = await getActiveMonth(db);
-  if (activeMonth) {
+  // Filter by selected month, otherwise default to active month
+  if (monthId === 'all') {
+    // no month filter
+  } else if (monthId) {
     where += ' AND e.month_id = ?';
-    binds.push(activeMonth.id);
+    binds.push(parseInt(monthId));
+  } else {
+    const activeMonth = await getActiveMonth(db);
+    if (activeMonth) {
+      where += ' AND e.month_id = ?';
+      binds.push(activeMonth.id);
+    }
   }
 
   // Validate sort column
@@ -115,6 +123,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     date: string;
     description: string;
     category_id: number | null;
+    created_by?: number;
   };
 
   if (!body.amount || !body.date) {
@@ -127,11 +136,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return errorResponse('No active month. Ask admin to start a new month.');
   }
 
-  // For members, created_by is themselves. Admin can also create expenses.
-  const createdBy = auth.user_type === 'member' ? auth.user_id : auth.user_id;
-
-  // If admin, we need to figure out which member — for now, admin creates as system
-  // But for this app, let's use auth.user_id for both
+  // Members always create as themselves; admin can assign to any member
+  let createdBy = auth.user_id;
+  if (auth.user_type === 'admin') {
+    if (!body.created_by) {
+      return errorResponse('Please select a member for this expense');
+    }
+    const member = await db
+      .prepare("SELECT id, name FROM members WHERE id = ? AND status = 'active'")
+      .bind(body.created_by)
+      .first<{ id: number; name: string }>();
+    if (!member) {
+      return errorResponse('Selected member not found or inactive');
+    }
+    createdBy = member.id;
+  } else {
+    createdBy = auth.user_id;
+  }
 
   try {
     const result = await db
@@ -141,9 +162,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       .bind(activeMonth.id, createdBy, body.amount, body.date, body.description || '', body.category_id)
       .run();
 
+    const forMember =
+      auth.user_type === 'admin' && body.created_by
+        ? ` for member #${body.created_by}`
+        : '';
+
     await logActivity(
       db, auth.user_type, auth.user_id,
-      `${auth.user_name} added expense: AED ${body.amount}`,
+      `${auth.user_name} added expense: AED ${body.amount}${forMember}`,
       'create_expense',
       body.description || '',
       result.meta.last_row_id as number,

@@ -2,27 +2,27 @@
 // Member — My Expenses Page
 // ============================================
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Search,
   ChevronLeft,
   ChevronRight,
-  PlusCircle,
   Receipt,
   ArrowUpDown,
 } from 'lucide-react';
 import { api, formatCurrency, formatDate, buildQueryString } from '../../lib/api';
-import type { Expense, ExpenseCategory } from '../../types';
+import { filterDemoExpenses } from '../../lib/demoData';
+import type { Expense } from '../../types';
+import { useAuth } from '../../contexts/AuthContext';
+import AddExpenseDialog from '../../components/expenses/AddExpenseDialog';
 
 export default function MyExpensesPage() {
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [total, setTotal] = useState(0);
-  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddExpense, setShowAddExpense] = useState(false);
 
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
@@ -31,22 +31,13 @@ export default function MyExpensesPage() {
   const limit = 20;
 
   useEffect(() => {
-    const fetchCategories = async () => {
-      const res = await api.get<ExpenseCategory[]>('/categories');
-      if (res.success && res.data) setCategories(res.data);
-    };
-    fetchCategories();
-  }, []);
-
-  useEffect(() => {
     fetchExpenses();
-  }, [search, categoryFilter, dateFrom, dateTo, page, sortBy, sortOrder]);
+  }, [search, dateFrom, dateTo, page, sortBy, sortOrder, user?.id]);
 
   const fetchExpenses = async () => {
     setLoading(true);
     const query = buildQueryString({
       search,
-      category_id: categoryFilter,
       date_from: dateFrom,
       date_to: dateTo,
       page,
@@ -59,6 +50,20 @@ export default function MyExpensesPage() {
     if (res.success && res.data) {
       setExpenses(res.data);
       setTotal(res.total || 0);
+    } else {
+      const demo = filterDemoExpenses({
+        search,
+        date_from: dateFrom,
+        date_to: dateTo,
+        page,
+        limit,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+        mine: true,
+        memberId: user?.id || 1,
+      });
+      setExpenses(demo.data);
+      setTotal(demo.total);
     }
     setLoading(false);
   };
@@ -87,8 +92,7 @@ export default function MyExpensesPage() {
           </p>
         </div>
         <div className="page-header-right">
-          <button className="btn btn-primary" onClick={() => navigate('/member/add-expense')}>
-            <PlusCircle size={16} />
+          <button className="btn btn-primary" onClick={() => setShowAddExpense(true)}>
             Add Expense
           </button>
         </div>
@@ -104,19 +108,8 @@ export default function MyExpensesPage() {
               placeholder="Search expenses..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              style={{ maxWidth: '16rem' }}
             />
           </div>
-          <select
-            className="select"
-            value={categoryFilter}
-            onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
-          >
-            <option value="">All Categories</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
           <input
             className="input"
             type="date"
@@ -131,10 +124,10 @@ export default function MyExpensesPage() {
             onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
             title="To date"
           />
-          {(search || categoryFilter || dateFrom || dateTo) && (
+          {(search || dateFrom || dateTo) && (
             <button
               className="btn btn-ghost btn-sm"
-              onClick={() => { setSearch(''); setCategoryFilter(''); setDateFrom(''); setDateTo(''); setPage(1); }}
+              onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); setPage(1); }}
             >
               Clear
             </button>
@@ -152,7 +145,6 @@ export default function MyExpensesPage() {
                 <th className={`sortable ${sortBy === 'amount' ? 'sorted' : ''}`} onClick={() => handleSort('amount')}>
                   Amount <ArrowUpDown size={12} style={{ display: 'inline', marginLeft: '0.25rem' }} />
                 </th>
-                <th>Category</th>
                 <th>Description</th>
               </tr>
             </thead>
@@ -160,25 +152,25 @@ export default function MyExpensesPage() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 4 }).map((_, j) => (
+                    {Array.from({ length: 3 }).map((_, j) => (
                       <td key={j}><div className="skeleton skeleton-text" style={{ width: '80%' }} /></td>
                     ))}
                   </tr>
                 ))
               ) : expenses.length === 0 ? (
                 <tr>
-                  <td colSpan={4}>
+                  <td colSpan={3}>
                     <div className="empty-state" style={{ padding: '3rem' }}>
                       <div className="empty-state-icon"><Receipt size={24} /></div>
                       <h3 className="empty-state-title">No Expenses</h3>
                       <p className="empty-state-description">
-                        {search || categoryFilter || dateFrom || dateTo
+                        {search || dateFrom || dateTo
                           ? 'No expenses match your filters'
                           : "You haven't added any expenses yet"}
                       </p>
-                      {!search && !categoryFilter && (
-                        <button className="btn btn-primary btn-sm" onClick={() => navigate('/member/add-expense')}>
-                          <PlusCircle size={14} /> Add Expense
+                      {!search && !dateFrom && !dateTo && (
+                        <button className="btn btn-primary btn-sm" onClick={() => setShowAddExpense(true)}>
+                          Add Expense
                         </button>
                       )}
                     </div>
@@ -189,9 +181,6 @@ export default function MyExpensesPage() {
                   <tr key={expense.id}>
                     <td>{formatDate(expense.date)}</td>
                     <td className="amount">{formatCurrency(expense.amount)}</td>
-                    <td>
-                      <span className="badge badge-secondary">{expense.category_name || 'Other'}</span>
-                    </td>
                     <td className="text-sm">{expense.description || '—'}</td>
                   </tr>
                 ))
@@ -226,6 +215,14 @@ export default function MyExpensesPage() {
           </div>
         )}
       </div>
+
+      <AddExpenseDialog
+        open={showAddExpense}
+        onClose={() => setShowAddExpense(false)}
+        onSuccess={fetchExpenses}
+        mode="member"
+        defaultMemberId={user?.id}
+      />
     </div>
   );
 }

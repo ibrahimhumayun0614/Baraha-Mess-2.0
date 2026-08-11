@@ -4,6 +4,13 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import type { AuthUser } from '../types';
 import { api } from '../lib/api';
+import {
+  DEMO_ADMIN_TOKEN,
+  DEMO_MEMBER_TOKEN_PREFIX,
+  DEMO_MEMBERS,
+  getDemoMemberName,
+  isDemoToken,
+} from '../lib/demoData';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -15,6 +22,23 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+
+function demoUserFromToken(token: string): AuthUser | null {
+  if (token === DEMO_ADMIN_TOKEN) {
+    return { id: 1, type: 'admin', name: 'Admin' };
+  }
+  if (token.startsWith(DEMO_MEMBER_TOKEN_PREFIX)) {
+    const memberId = Number(token.slice(DEMO_MEMBER_TOKEN_PREFIX.length + 1)) || 1;
+    const member = DEMO_MEMBERS.find((m) => m.id === memberId);
+    return {
+      id: memberId,
+      type: 'member',
+      name: member?.name || getDemoMemberName(memberId),
+      member_id: member?.member_id,
+    };
+  }
+  return null;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -30,6 +54,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!token) {
       setLoading(false);
       return;
+    }
+
+    // Keep demo sessions alive when API is offline
+    if (isDemoToken(token)) {
+      const demoUser = demoUserFromToken(token);
+      if (demoUser) {
+        setUser(demoUser);
+        setLoading(false);
+        return;
+      }
     }
 
     const res = await api.get<AuthUser>('/auth/me');
@@ -54,19 +88,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: true };
     }
 
-    // Demo/preview fallback when backend API is not running directly in Vite dev server
+    // Demo/preview fallback when backend API is not running
     if (type === 'admin') {
       if (password === 'admin123') {
         const mockUser: AuthUser = { id: 1, type: 'admin', name: 'Admin' };
-        localStorage.setItem('baraha_token', 'demo-admin-token');
+        localStorage.setItem('baraha_token', DEMO_ADMIN_TOKEN);
         setUser(mockUser);
         return { success: true };
-      } else {
-        return { success: false, error: 'Invalid password. Use "admin123"' };
       }
-    } else if (type === 'member' && memberId) {
-      const mockUser: AuthUser = { id: memberId, type: 'member', name: 'Mohamed' };
-      localStorage.setItem('baraha_token', 'demo-member-token');
+      return { success: false, error: 'Invalid password. Use "admin123"' };
+    }
+
+    if (type === 'member' && memberId) {
+      const member = DEMO_MEMBERS.find((m) => m.id === memberId);
+      const mockUser: AuthUser = {
+        id: memberId,
+        type: 'member',
+        name: member?.name || getDemoMemberName(memberId),
+        member_id: member?.member_id,
+      };
+      localStorage.setItem('baraha_token', `${DEMO_MEMBER_TOKEN_PREFIX}-${memberId}`);
       setUser(mockUser);
       return { success: true };
     }
@@ -75,7 +116,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    await api.post('/auth/logout', {});
+    const token = localStorage.getItem('baraha_token');
+    if (!isDemoToken(token)) {
+      await api.post('/auth/logout', {});
+    }
     localStorage.removeItem('baraha_token');
     setUser(null);
   }, []);

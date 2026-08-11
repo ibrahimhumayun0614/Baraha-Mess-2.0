@@ -10,28 +10,32 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowUpDown,
-  Filter,
-  Download,
 } from 'lucide-react';
-import { api, formatCurrency, formatDate, formatDateTime, buildQueryString } from '../../lib/api';
-import type { Expense, ExpenseCategory, Member } from '../../types';
+import { api, formatCurrency, formatDate, formatDateTime, formatMonthYear, buildQueryString } from '../../lib/api';
+import { DEMO_MEMBERS, DEMO_MONTHS, filterDemoExpenses } from '../../lib/demoData';
+import type { Expense, Member, MessMonth } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import Dialog from '../../components/ui/Dialog';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import AddExpenseDialog from '../../components/expenses/AddExpenseDialog';
+import Select from '../../components/ui/Select';
+import { useSearchParams } from 'react-router-dom';
 
 export default function ExpensesPage() {
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [total, setTotal] = useState(0);
-  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [months, setMonths] = useState<MessMonth[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionDropdown, setActionDropdown] = useState<number | null>(null);
+  const [showAddExpense, setShowAddExpense] = useState(false);
 
   // Filters
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
   const [memberFilter, setMemberFilter] = useState('');
+  const [monthFilter, setMonthFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
@@ -48,17 +52,24 @@ export default function ExpensesPage() {
     amount: '',
     date: '',
     description: '',
-    category_id: '',
   });
 
   useEffect(() => {
-    fetchCategories();
     fetchMembers();
+    fetchMonths();
   }, []);
 
   useEffect(() => {
+    if (searchParams.get('add') === '1') {
+      setShowAddExpense(true);
+      searchParams.delete('add');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
     fetchExpenses();
-  }, [search, categoryFilter, memberFilter, dateFrom, dateTo, page, sortBy, sortOrder]);
+  }, [search, memberFilter, monthFilter, dateFrom, dateTo, page, sortBy, sortOrder]);
 
   useEffect(() => {
     const handleClick = () => setActionDropdown(null);
@@ -72,8 +83,8 @@ export default function ExpensesPage() {
     setLoading(true);
     const query = buildQueryString({
       search,
-      category_id: categoryFilter,
       created_by: memberFilter,
+      month_id: monthFilter || undefined,
       date_from: dateFrom,
       date_to: dateTo,
       page,
@@ -85,18 +96,41 @@ export default function ExpensesPage() {
     if (res.success && res.data) {
       setExpenses(res.data);
       setTotal(res.total || 0);
+    } else {
+      const demo = filterDemoExpenses({
+        search,
+        created_by: memberFilter,
+        month_id: monthFilter || undefined,
+        date_from: dateFrom,
+        date_to: dateTo,
+        page,
+        limit,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+      });
+      setExpenses(demo.data);
+      setTotal(demo.total);
     }
     setLoading(false);
-  };
-
-  const fetchCategories = async () => {
-    const res = await api.get<ExpenseCategory[]>('/categories');
-    if (res.success && res.data) setCategories(res.data);
   };
 
   const fetchMembers = async () => {
     const res = await api.get<Member[]>('/members');
     if (res.success && res.data) setMembers(res.data);
+    else setMembers(DEMO_MEMBERS.filter((m) => m.status === 'active'));
+  };
+
+  const fetchMonths = async () => {
+    const res = await api.get<MessMonth[]>('/months');
+    if (res.success && res.data && res.data.length > 0) {
+      setMonths(res.data);
+      const active = res.data.find((m) => m.status === 'active');
+      if (active && !monthFilter) setMonthFilter(String(active.id));
+    } else {
+      setMonths(DEMO_MONTHS);
+      const active = DEMO_MONTHS.find((m) => m.status === 'active');
+      if (active && !monthFilter) setMonthFilter(String(active.id));
+    }
   };
 
   const handleSort = (column: string) => {
@@ -117,7 +151,7 @@ export default function ExpensesPage() {
       amount: parseFloat(editForm.amount),
       date: editForm.date,
       description: editForm.description,
-      category_id: editForm.category_id ? parseInt(editForm.category_id) : null,
+      category_id: null,
     });
     if (res.success) {
       toast.success('Expense updated');
@@ -149,7 +183,6 @@ export default function ExpensesPage() {
       amount: String(expense.amount),
       date: expense.date,
       description: expense.description,
-      category_id: expense.category_id ? String(expense.category_id) : '',
     });
     setShowEditDialog(true);
     setActionDropdown(null);
@@ -174,6 +207,11 @@ export default function ExpensesPage() {
             {totalAmount > 0 && ` · Total: ${formatCurrency(totalAmount)}`}
           </p>
         </div>
+        <div className="page-header-right">
+          <button className="btn btn-primary" onClick={() => setShowAddExpense(true)}>
+            Add Expense
+          </button>
+        </div>
       </div>
 
       <div className="card animate-fade-in">
@@ -186,35 +224,34 @@ export default function ExpensesPage() {
               placeholder="Search expenses..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              style={{ maxWidth: '16rem' }}
             />
           </div>
-          <select
-            className="select"
-            value={categoryFilter}
-            onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
-          >
-            <option value="">All Categories</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          <select
-            className="select"
+          <Select
+            value={monthFilter}
+            onChange={(value) => { setMonthFilter(value); setPage(1); }}
+            placeholder="Select month"
+            options={[
+              { value: 'all', label: 'All Months' },
+              ...months.map((m) => ({
+                value: String(m.id),
+                label: `${formatMonthYear(m.month_year)}${m.status === 'active' ? ' (Active)' : ''}`,
+              })),
+            ]}
+          />
+          <Select
             value={memberFilter}
-            onChange={(e) => { setMemberFilter(e.target.value); setPage(1); }}
-          >
-            <option value="">All Members</option>
-            {members.map((m) => (
-              <option key={m.id} value={m.id}>{m.name}</option>
-            ))}
-          </select>
+            onChange={(value) => { setMemberFilter(value); setPage(1); }}
+            placeholder="All Members"
+            options={[
+              { value: '', label: 'All Members' },
+              ...members.map((m) => ({ value: String(m.id), label: m.name })),
+            ]}
+          />
           <input
             className="input"
             type="date"
             value={dateFrom}
             onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
-            placeholder="From"
             title="Date from"
           />
           <input
@@ -222,15 +259,19 @@ export default function ExpensesPage() {
             type="date"
             value={dateTo}
             onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
-            placeholder="To"
             title="Date to"
           />
-          {(search || categoryFilter || memberFilter || dateFrom || dateTo) && (
+          {(search || memberFilter || dateFrom || dateTo || (monthFilter && monthFilter !== String(months.find((m) => m.status === 'active')?.id || ''))) && (
             <button
               className="btn btn-ghost btn-sm"
               onClick={() => {
-                setSearch(''); setCategoryFilter(''); setMemberFilter('');
-                setDateFrom(''); setDateTo(''); setPage(1);
+                const active = months.find((m) => m.status === 'active');
+                setSearch('');
+                setMemberFilter('');
+                setDateFrom('');
+                setDateTo('');
+                setMonthFilter(active ? String(active.id) : 'all');
+                setPage(1);
               }}
             >
               Clear Filters
@@ -251,7 +292,6 @@ export default function ExpensesPage() {
                   Amount <ArrowUpDown size={12} style={{ display: 'inline', marginLeft: '0.25rem' }} />
                 </th>
                 <th>Description</th>
-                <th>Category</th>
                 <th>Created By</th>
                 <th>Created At</th>
                 <th>Actions</th>
@@ -261,14 +301,14 @@ export default function ExpensesPage() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
+                    {Array.from({ length: 7 }).map((_, j) => (
                       <td key={j}><div className="skeleton skeleton-text" style={{ width: '80%' }} /></td>
                     ))}
                   </tr>
                 ))
               ) : expenses.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="table-empty">No expenses found</td>
+                  <td colSpan={7} className="table-empty">No expenses found</td>
                 </tr>
               ) : (
                 expenses.map((expense) => (
@@ -278,9 +318,6 @@ export default function ExpensesPage() {
                     <td className="amount">{formatCurrency(expense.amount)}</td>
                     <td>
                       <span className="text-sm">{expense.description || '—'}</span>
-                    </td>
-                    <td>
-                      <span className="badge badge-secondary">{expense.category_name || 'Other'}</span>
                     </td>
                     <td>
                       <div className="flex items-center gap-2">
@@ -382,15 +419,6 @@ export default function ExpensesPage() {
             <input className="input" type="date" value={editForm.date} onChange={(e) => setEditForm({ ...editForm, date: e.target.value })} required />
           </div>
           <div className="input-group">
-            <label className="input-label">Category</label>
-            <select className="select" value={editForm.category_id} onChange={(e) => setEditForm({ ...editForm, category_id: e.target.value })}>
-              <option value="">Select category</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="input-group">
             <label className="input-label">Description</label>
             <textarea className="textarea" placeholder="Describe the expense..." value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
           </div>
@@ -408,6 +436,12 @@ export default function ExpensesPage() {
         confirmText="Delete"
         loading={formLoading}
         destructive
+      />
+
+      <AddExpenseDialog
+        open={showAddExpense}
+        onClose={() => setShowAddExpense(false)}
+        onSuccess={fetchExpenses}
       />
     </div>
   );

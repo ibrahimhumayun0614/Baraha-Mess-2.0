@@ -162,11 +162,12 @@ export interface CreateMonthRequest {
 }
 
 export interface CreateExpenseRequest {
-  month_id: number;
+  month_id?: number;
   amount: number;
   date: string;
   description: string;
   category_id: number | null;
+  created_by?: number;
 }
 
 export interface RecordPaymentRequest {

@@ -9,7 +9,6 @@ import {
   Receipt,
   ClipboardList,
   LogOut,
-  PlusCircle,
   History,
   Home,
 } from 'lucide-react';
@@ -39,7 +38,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const memberLinks = [
     { to: '/member', icon: Home, label: 'Dashboard', end: true },
-    { to: '/member/add-expense', icon: PlusCircle, label: 'Add Expense' },
     { to: '/member/expenses', icon: History, label: 'My Expenses' },
   ];
 
@@ -53,7 +51,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       />
       <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
-          <div className="sidebar-logo">BM</div>
           <div className="sidebar-brand">
             <span className="sidebar-brand-name">Baraha Mess</span>
             <span className="sidebar-brand-sub">Management System</span>

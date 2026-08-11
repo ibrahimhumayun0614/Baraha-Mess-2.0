@@ -18,7 +18,9 @@ import {
   Activity,
 } from 'lucide-react';
 import { api, formatDateTime, buildQueryString } from '../../lib/api';
+import { filterDemoActivityLogs } from '../../lib/demoData';
 import type { ActivityLog } from '../../types';
+import Select from '../../components/ui/Select';
 
 const ACTION_ICONS: Record<string, typeof LogIn> = {
   login: LogIn,
@@ -73,6 +75,16 @@ export default function ActivityLogsPage() {
     if (res.success && res.data) {
       setLogs(res.data);
       setTotal(res.total || 0);
+    } else {
+      const demo = filterDemoActivityLogs({
+        search,
+        action_type: actionType,
+        actor_type: actorType,
+        page,
+        limit,
+      });
+      setLogs(demo.data);
+      setTotal(demo.total);
     }
     setLoading(false);
   };
@@ -98,34 +110,35 @@ export default function ActivityLogsPage() {
               placeholder="Search logs..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              style={{ maxWidth: '16rem' }}
             />
           </div>
-          <select
-            className="select"
+          <Select
             value={actorType}
-            onChange={(e) => { setActorType(e.target.value); setPage(1); }}
-          >
-            <option value="">All Users</option>
-            <option value="admin">Admin</option>
-            <option value="member">Members</option>
-          </select>
-          <select
-            className="select"
+            onChange={(value) => { setActorType(value); setPage(1); }}
+            placeholder="All Users"
+            options={[
+              { value: '', label: 'All Users' },
+              { value: 'admin', label: 'Admin' },
+              { value: 'member', label: 'Members' },
+            ]}
+          />
+          <Select
             value={actionType}
-            onChange={(e) => { setActionType(e.target.value); setPage(1); }}
-          >
-            <option value="">All Actions</option>
-            <option value="login">Login</option>
-            <option value="member_access">Member Access</option>
-            <option value="create_member">Create Member</option>
-            <option value="create_expense">Create Expense</option>
-            <option value="edit_expense">Edit Expense</option>
-            <option value="delete_expense">Delete Expense</option>
-            <option value="record_payment">Record Payment</option>
-            <option value="start_month">Start Month</option>
-            <option value="close_month">Close Month</option>
-          </select>
+            onChange={(value) => { setActionType(value); setPage(1); }}
+            placeholder="All Actions"
+            options={[
+              { value: '', label: 'All Actions' },
+              { value: 'login', label: 'Login' },
+              { value: 'member_access', label: 'Member Access' },
+              { value: 'create_member', label: 'Create Member' },
+              { value: 'create_expense', label: 'Create Expense' },
+              { value: 'edit_expense', label: 'Edit Expense' },
+              { value: 'delete_expense', label: 'Delete Expense' },
+              { value: 'record_payment', label: 'Record Payment' },
+              { value: 'start_month', label: 'Start Month' },
+              { value: 'close_month', label: 'Close Month' },
+            ]}
+          />
           {(search || actionType || actorType) && (
             <button
               className="btn btn-ghost btn-sm"

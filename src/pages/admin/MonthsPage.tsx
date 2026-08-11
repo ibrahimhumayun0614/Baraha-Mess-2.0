@@ -15,6 +15,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { api, formatCurrency, formatMonthYear } from '../../lib/api';
+import { DEMO_MONTHS, getDemoMonthSummary } from '../../lib/demoData';
 import type { MessMonth, MonthSummary } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import Dialog from '../../components/ui/Dialog';
@@ -45,22 +46,33 @@ export default function MonthsPage() {
   const fetchMonths = async () => {
     setLoading(true);
     const res = await api.get<MessMonth[]>('/months');
-    if (res.success && res.data) {
+    if (res.success && res.data && res.data.length > 0) {
       setMonths(res.data);
-      // Auto-select the active month or first month
       const active = res.data.find((m) => m.status === 'active') || res.data[0];
       if (active) {
         selectMonth(active);
+      }
+    } else {
+      setMonths(DEMO_MONTHS);
+      const active = DEMO_MONTHS.find((m) => m.status === 'active') || DEMO_MONTHS[0];
+      if (active) {
+        selectMonth(active, true);
       }
     }
     setLoading(false);
   };
 
-  const selectMonth = async (month: MessMonth) => {
+  const selectMonth = async (month: MessMonth, useDemo = false) => {
     setSelectedMonth(month);
+    if (useDemo) {
+      setSummary(getDemoMonthSummary(month.id));
+      return;
+    }
     const res = await api.get<MonthSummary>(`/months/${month.id}/summary`);
     if (res.success && res.data) {
       setSummary(res.data);
+    } else {
+      setSummary(getDemoMonthSummary(month.id));
     }
   };
 

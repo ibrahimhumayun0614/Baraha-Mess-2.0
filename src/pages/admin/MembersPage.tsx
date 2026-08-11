@@ -1,23 +1,16 @@
 // ============================================
 // Admin — Members Management Page
 // ============================================
-import { useState, useEffect } from 'react';
-import {
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  DollarSign,
-  MoreHorizontal,
-  UserPlus,
-  UserMinus,
-  X,
-} from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Search, MoreHorizontal } from 'lucide-react';
 import { api, formatCurrency } from '../../lib/api';
+import { DEMO_MEMBERS, DEMO_MONTH_MEMBERS, isDemoToken } from '../../lib/demoData';
 import type { Member, MonthMember } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import Dialog from '../../components/ui/Dialog';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import Select from '../../components/ui/Select';
+import AddExpenseDialog from '../../components/expenses/AddExpenseDialog';
 
 export default function MembersPage() {
   const toast = useToast();
@@ -25,34 +18,29 @@ export default function MembersPage() {
   const [monthMembers, setMonthMembers] = useState<MonthMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showAddExpense, setShowAddExpense] = useState(false);
+  const [expenseMemberId, setExpenseMemberId] = useState<number | undefined>(undefined);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [selectedMonthMember, setSelectedMonthMember] = useState<MonthMember | null>(null);
   const [actionDropdown, setActionDropdown] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
 
-  // Form state
   const [form, setForm] = useState({
     name: '',
     member_id: '',
-    phone: '',
-    email: '',
-  });
-
-  const [paymentForm, setPaymentForm] = useState({
-    amount: '',
-    payment_date: new Date().toISOString().split('T')[0],
-    notes: '',
+    monthly_amount: '',
+    amount_paid: '',
   });
 
   useEffect(() => {
     fetchMembers();
   }, []);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClick = () => setActionDropdown(null);
     if (actionDropdown !== null) {
@@ -66,10 +54,14 @@ export default function MembersPage() {
     const res = await api.get<Member[]>('/members');
     if (res.success && res.data) {
       setMembers(res.data);
+    } else {
+      setMembers(DEMO_MEMBERS);
     }
     const mmRes = await api.get<MonthMember[]>('/dashboard/members');
     if (mmRes.success && mmRes.data) {
       setMonthMembers(mmRes.data);
+    } else {
+      setMonthMembers(DEMO_MONTH_MEMBERS);
     }
     setLoading(false);
   };
@@ -78,15 +70,80 @@ export default function MembersPage() {
     return monthMembers.find((mm) => mm.member_id === memberId);
   };
 
+  const defaultMonthlyAmount = () => {
+    const fromMonth = monthMembers[0]?.contribution_amount;
+    return String(fromMonth ?? 500);
+  };
+
+  const applyPaymentStatus = (contribution: number, paid: number): MonthMember['payment_status'] => {
+    if (paid >= contribution) return 'paid';
+    if (paid > 0) return 'partial';
+    return 'unpaid';
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormLoading(true);
-    const res = await api.post('/members', form);
-    if (res.success) {
+    const res = await api.post<{ id: number }>('/members', {
+      name: form.name,
+      member_id: form.member_id,
+      phone: '',
+      email: '',
+    });
+
+    const demo = isDemoToken(localStorage.getItem('baraha_token'));
+    if (res.success || demo) {
+      const contribution = parseFloat(form.monthly_amount || defaultMonthlyAmount()) || 500;
+      const paid = parseFloat(form.amount_paid || '0') || 0;
+      const memberId = res.data?.id;
+
+      if (demo && !res.success) {
+        const newId = Math.max(0, ...members.map((m) => m.id)) + 1;
+        const now = new Date().toISOString();
+        const newMember: Member = {
+          id: newId,
+          name: form.name,
+          member_id: form.member_id,
+          phone: '',
+          email: '',
+          status: 'active',
+          created_at: now,
+          updated_at: now,
+        };
+        setMembers((prev) => [...prev, newMember]);
+        setMonthMembers((prev) => [
+          ...prev,
+          {
+            id: Math.max(0, ...prev.map((m) => m.id)) + 1,
+            month_id: prev[0]?.month_id || 3,
+            member_id: newId,
+            contribution_amount: contribution,
+            payment_status: applyPaymentStatus(contribution, paid),
+            amount_paid: paid,
+            created_at: now,
+            member_name: form.name,
+            member_member_id: form.member_id,
+          },
+        ]);
+      } else if (memberId && paid > 0) {
+        const mmRes = await api.get<MonthMember[]>('/dashboard/members');
+        const mm = mmRes.data?.find((m) => m.member_id === memberId);
+        if (mm) {
+          await api.post('/payments', {
+            month_member_id: mm.id,
+            amount: paid,
+            payment_date: new Date().toISOString().split('T')[0],
+            notes: '',
+          });
+        }
+        await fetchMembers();
+      } else {
+        await fetchMembers();
+      }
+
       toast.success('Member created successfully');
       setShowCreateDialog(false);
-      setForm({ name: '', member_id: '', phone: '', email: '' });
-      fetchMembers();
+      setForm({ name: '', member_id: '', monthly_amount: '', amount_paid: '' });
     } else {
       toast.error(res.error || 'Failed to create member');
     }
@@ -97,14 +154,74 @@ export default function MembersPage() {
     e.preventDefault();
     if (!selectedMember) return;
     setFormLoading(true);
-    const res = await api.put(`/members/${selectedMember.id}`, form);
-    if (res.success) {
-      toast.success('Member updated successfully');
-      setShowEditDialog(false);
-      fetchMembers();
-    } else {
+
+    const res = await api.put(`/members/${selectedMember.id}`, {
+      name: form.name,
+      member_id: form.member_id,
+      phone: '',
+      email: '',
+    });
+
+    const demo = isDemoToken(localStorage.getItem('baraha_token'));
+    if (!(res.success || demo)) {
       toast.error(res.error || 'Failed to update member');
+      setFormLoading(false);
+      return;
     }
+
+    const payAmount = parseFloat(form.amount_paid || '0') || 0;
+
+    if (demo && !res.success) {
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === selectedMember.id
+            ? { ...m, name: form.name, member_id: form.member_id, updated_at: new Date().toISOString() }
+            : m
+        )
+      );
+      if (selectedMonthMember && payAmount > 0) {
+        setMonthMembers((prev) =>
+          prev.map((mm) => {
+            if (mm.id !== selectedMonthMember.id) return mm;
+            const amountPaid = mm.amount_paid + payAmount;
+            return {
+              ...mm,
+              amount_paid: amountPaid,
+              payment_status: applyPaymentStatus(mm.contribution_amount, amountPaid),
+              member_name: form.name,
+              member_member_id: form.member_id,
+            };
+          })
+        );
+      } else {
+        setMonthMembers((prev) =>
+          prev.map((mm) =>
+            mm.member_id === selectedMember.id
+              ? { ...mm, member_name: form.name, member_member_id: form.member_id }
+              : mm
+          )
+        );
+      }
+    } else {
+      if (selectedMonthMember && payAmount > 0) {
+        const payRes = await api.post('/payments', {
+          month_member_id: selectedMonthMember.id,
+          amount: payAmount,
+          payment_date: new Date().toISOString().split('T')[0],
+          notes: '',
+        });
+        if (!(payRes.success || demo)) {
+          toast.error(payRes.error || 'Member updated, but payment failed');
+          setFormLoading(false);
+          fetchMembers();
+          return;
+        }
+      }
+      await fetchMembers();
+    }
+
+    toast.success(payAmount > 0 ? 'Member and payment updated' : 'Member updated successfully');
+    setShowEditDialog(false);
     setFormLoading(false);
   };
 
@@ -112,61 +229,36 @@ export default function MembersPage() {
     if (!selectedMember) return;
     setFormLoading(true);
     const res = await api.delete(`/members/${selectedMember.id}`);
-    if (res.success) {
+    const demo = isDemoToken(localStorage.getItem('baraha_token'));
+    if (res.success || demo) {
+      if (demo && !res.success) {
+        setMembers((prev) =>
+          prev.map((m) =>
+            m.id === selectedMember.id ? { ...m, status: 'inactive' } : m
+          )
+        );
+      } else {
+        await fetchMembers();
+      }
       toast.success('Member deactivated');
       setShowDeleteDialog(false);
-      fetchMembers();
     } else {
       toast.error(res.error || 'Failed to deactivate member');
     }
     setFormLoading(false);
   };
 
-  const handleRecordPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedMonthMember) return;
-    setFormLoading(true);
-    const res = await api.post('/payments', {
-      month_member_id: selectedMonthMember.id,
-      amount: parseFloat(paymentForm.amount),
-      payment_date: paymentForm.payment_date,
-      notes: paymentForm.notes,
-    });
-    if (res.success) {
-      toast.success('Payment recorded successfully');
-      setShowPaymentDialog(false);
-      fetchMembers();
-    } else {
-      toast.error(res.error || 'Failed to record payment');
-    }
-    setFormLoading(false);
-  };
-
   const openEdit = (member: Member) => {
+    const mm = getMonthMember(member.id);
     setSelectedMember(member);
+    setSelectedMonthMember(mm || null);
     setForm({
       name: member.name,
       member_id: member.member_id,
-      phone: member.phone,
-      email: member.email,
+      monthly_amount: mm ? String(mm.contribution_amount) : defaultMonthlyAmount(),
+      amount_paid: '',
     });
     setShowEditDialog(true);
-    setActionDropdown(null);
-  };
-
-  const openPayment = (member: Member) => {
-    const mm = getMonthMember(member.id);
-    if (!mm) {
-      toast.warning('No active month or member not in current month');
-      return;
-    }
-    setSelectedMonthMember(mm);
-    setPaymentForm({
-      amount: String(mm.contribution_amount - mm.amount_paid),
-      payment_date: new Date().toISOString().split('T')[0],
-      notes: '',
-    });
-    setShowPaymentDialog(true);
     setActionDropdown(null);
   };
 
@@ -176,36 +268,58 @@ export default function MembersPage() {
     setActionDropdown(null);
   };
 
-  const filteredMembers = members.filter((m) =>
-    m.name.toLowerCase().includes(search.toLowerCase()) ||
-    m.member_id.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredMembers = useMemo(() => {
+    return members.filter((m) => {
+      const q = search.toLowerCase();
+      const matchesSearch =
+        !q ||
+        m.name.toLowerCase().includes(q) ||
+        m.member_id.toLowerCase().includes(q);
+      const matchesStatus = !statusFilter || m.status === statusFilter;
+      const mm = getMonthMember(m.id);
+      const matchesPayment =
+        !paymentFilter ||
+        (paymentFilter === 'none' ? !mm : mm?.payment_status === paymentFilter);
+      return matchesSearch && matchesStatus && matchesPayment;
+    });
+  }, [members, monthMembers, search, statusFilter, paymentFilter]);
+
+  const hasFilters = !!(search || statusFilter || paymentFilter);
 
   return (
     <div>
       <div className="page-header">
         <div className="page-header-left">
           <h1>Members</h1>
-          <p className="text-sm text-muted">Manage mess members and their payments</p>
+          <p className="text-sm text-muted">
+            {filteredMembers.length} member{filteredMembers.length !== 1 ? 's' : ''}
+            {hasFilters ? ' found' : ''}
+          </p>
         </div>
         <div className="page-header-right">
+          <button className="btn btn-outline" onClick={() => { setExpenseMemberId(undefined); setShowAddExpense(true); }}>
+            Add Expense
+          </button>
           <button
             className="btn btn-primary"
             onClick={() => {
-              setForm({ name: '', member_id: '', phone: '', email: '' });
+              setForm({
+                name: '',
+                member_id: '',
+                monthly_amount: defaultMonthlyAmount(),
+                amount_paid: '',
+              });
               setShowCreateDialog(true);
             }}
           >
-            <UserPlus size={16} />
             Add Member
           </button>
         </div>
       </div>
 
       <div className="card animate-fade-in">
-        {/* Search */}
         <div className="filter-bar">
-          <div className="search-bar" style={{ flex: 1, maxWidth: '20rem' }}>
+          <div className="search-bar">
             <Search size={16} className="search-icon" />
             <input
               className="input"
@@ -214,12 +328,42 @@ export default function MembersPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <span className="text-sm text-muted ml-auto">
-            {filteredMembers.length} member{filteredMembers.length !== 1 ? 's' : ''}
-          </span>
+          <Select
+            value={statusFilter}
+            onChange={setStatusFilter}
+            placeholder="All Status"
+            options={[
+              { value: '', label: 'All Status' },
+              { value: 'active', label: 'Active' },
+              { value: 'inactive', label: 'Inactive' },
+            ]}
+          />
+          <Select
+            value={paymentFilter}
+            onChange={setPaymentFilter}
+            placeholder="Payment Status"
+            options={[
+              { value: '', label: 'All Payments' },
+              { value: 'paid', label: 'Paid' },
+              { value: 'partial', label: 'Partial' },
+              { value: 'unpaid', label: 'Unpaid' },
+              { value: 'none', label: 'Not in month' },
+            ]}
+          />
+          {hasFilters && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setSearch('');
+                setStatusFilter('');
+                setPaymentFilter('');
+              }}
+            >
+              Clear Filters
+            </button>
+          )}
         </div>
 
-        {/* Table */}
         <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
           <table className="table">
             <thead>
@@ -246,7 +390,9 @@ export default function MembersPage() {
               ) : filteredMembers.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="table-empty">
-                    {search ? 'No members match your search' : 'No members yet. Create your first member!'}
+                    {hasFilters
+                      ? 'No members match your filters'
+                      : 'No members yet. Create your first member!'}
                   </td>
                 </tr>
               ) : (
@@ -256,20 +402,12 @@ export default function MembersPage() {
                   return (
                     <tr key={member.id}>
                       <td>
-                        <div className="flex items-center gap-2">
-                          <div className="avatar avatar-sm">{member.name.charAt(0)}</div>
-                          <div>
-                            <div className="font-medium">{member.name}</div>
-                            {member.phone && (
-                              <div className="text-xs text-muted">{member.phone}</div>
-                            )}
-                          </div>
-                        </div>
+                        <div className="font-medium">{member.name}</div>
                       </td>
                       <td className="text-muted">{member.member_id}</td>
                       <td>
                         <span className={`badge ${member.status === 'active' ? 'badge-success' : 'badge-secondary'}`}>
-                          {member.status}
+                          {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
                         </span>
                       </td>
                       <td className="amount">{mm ? formatCurrency(mm.contribution_amount) : '—'}</td>
@@ -302,14 +440,21 @@ export default function MembersPage() {
                           {actionDropdown === member.id && (
                             <div className="dropdown-menu">
                               <button className="dropdown-item" onClick={() => openEdit(member)}>
-                                <Edit size={14} /> Edit
+                                Edit
                               </button>
-                              <button className="dropdown-item" onClick={() => openPayment(member)}>
-                                <DollarSign size={14} /> Record Payment
+                              <button
+                                className="dropdown-item"
+                                onClick={() => {
+                                  setExpenseMemberId(member.id);
+                                  setShowAddExpense(true);
+                                  setActionDropdown(null);
+                                }}
+                              >
+                                Add Expense
                               </button>
                               <div className="dropdown-separator" />
                               <button className="dropdown-item destructive" onClick={() => openDelete(member)}>
-                                <UserMinus size={14} /> Deactivate
+                                Deactivate
                               </button>
                             </div>
                           )}
@@ -324,7 +469,6 @@ export default function MembersPage() {
         </div>
       </div>
 
-      {/* Create Member Dialog */}
       <Dialog
         open={showCreateDialog}
         onClose={() => setShowCreateDialog(false)}
@@ -348,17 +492,32 @@ export default function MembersPage() {
             <input className="input" placeholder="e.g. MEM-001" value={form.member_id} onChange={(e) => setForm({ ...form, member_id: e.target.value })} required />
           </div>
           <div className="input-group">
-            <label className="input-label">Phone</label>
-            <input className="input" placeholder="e.g. +971 50 123 4567" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <label className="input-label">Monthly Amount (AED)</label>
+            <input
+              className="input"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="500.00"
+              value={form.monthly_amount}
+              onChange={(e) => setForm({ ...form, monthly_amount: e.target.value })}
+            />
           </div>
           <div className="input-group">
-            <label className="input-label">Email</label>
-            <input className="input" type="email" placeholder="e.g. mohamed@email.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <label className="input-label">Amount Paid (AED)</label>
+            <input
+              className="input"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="0.00"
+              value={form.amount_paid}
+              onChange={(e) => setForm({ ...form, amount_paid: e.target.value })}
+            />
           </div>
         </form>
       </Dialog>
 
-      {/* Edit Member Dialog */}
       <Dialog
         open={showEditDialog}
         onClose={() => setShowEditDialog(false)}
@@ -381,61 +540,45 @@ export default function MembersPage() {
             <label className="input-label">Member ID *</label>
             <input className="input" value={form.member_id} onChange={(e) => setForm({ ...form, member_id: e.target.value })} required />
           </div>
+
+          {selectedMonthMember ? (
+            <div style={{ padding: '0.75rem', backgroundColor: 'var(--muted)', borderRadius: 'var(--radius)' }}>
+              <div className="text-sm"><strong>Monthly Amount:</strong> {formatCurrency(selectedMonthMember.contribution_amount)}</div>
+              <div className="text-sm"><strong>Already Paid:</strong> {formatCurrency(selectedMonthMember.amount_paid)}</div>
+              <div className="text-sm"><strong>Pending:</strong> {formatCurrency(selectedMonthMember.contribution_amount - selectedMonthMember.amount_paid)}</div>
+            </div>
+          ) : (
+            <div className="input-group">
+              <label className="input-label">Monthly Amount (AED)</label>
+              <input
+                className="input"
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.monthly_amount}
+                onChange={(e) => setForm({ ...form, monthly_amount: e.target.value })}
+              />
+            </div>
+          )}
+
           <div className="input-group">
-            <label className="input-label">Phone</label>
-            <input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-          </div>
-          <div className="input-group">
-            <label className="input-label">Email</label>
-            <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <label className="input-label">Record Payment (AED)</label>
+            <input
+              className="input"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="0.00"
+              value={form.amount_paid}
+              onChange={(e) => setForm({ ...form, amount_paid: e.target.value })}
+            />
+            <p className="text-xs text-muted" style={{ marginTop: '0.375rem' }}>
+              Enter an amount to record a new payment for the current month. Leave blank to skip.
+            </p>
           </div>
         </form>
       </Dialog>
 
-      {/* Record Payment Dialog */}
-      <Dialog
-        open={showPaymentDialog}
-        onClose={() => setShowPaymentDialog(false)}
-        title="Record Payment"
-        footer={
-          <>
-            <button className="btn btn-outline" onClick={() => setShowPaymentDialog(false)}>Cancel</button>
-            <button className="btn btn-primary" onClick={handleRecordPayment} disabled={formLoading || !paymentForm.amount}>
-              {formLoading ? 'Recording...' : 'Record Payment'}
-            </button>
-          </>
-        }
-      >
-        {selectedMonthMember && (
-          <form onSubmit={handleRecordPayment} className="flex flex-col gap-4">
-            <div style={{ padding: '0.75rem', backgroundColor: 'var(--muted)', borderRadius: 'var(--radius)', marginBottom: '0.5rem' }}>
-              <div className="text-sm">
-                <strong>Contribution:</strong> {formatCurrency(selectedMonthMember.contribution_amount)}
-              </div>
-              <div className="text-sm">
-                <strong>Already Paid:</strong> {formatCurrency(selectedMonthMember.amount_paid)}
-              </div>
-              <div className="text-sm">
-                <strong>Remaining:</strong> {formatCurrency(selectedMonthMember.contribution_amount - selectedMonthMember.amount_paid)}
-              </div>
-            </div>
-            <div className="input-group">
-              <label className="input-label">Amount (AED) *</label>
-              <input className="input" type="number" step="0.01" min="0" placeholder="0.00" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} required />
-            </div>
-            <div className="input-group">
-              <label className="input-label">Payment Date</label>
-              <input className="input" type="date" value={paymentForm.payment_date} onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })} />
-            </div>
-            <div className="input-group">
-              <label className="input-label">Notes</label>
-              <textarea className="textarea" placeholder="Optional notes..." value={paymentForm.notes} onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })} />
-            </div>
-          </form>
-        )}
-      </Dialog>
-
-      {/* Delete Confirmation */}
       <ConfirmDialog
         open={showDeleteDialog}
         onClose={() => setShowDeleteDialog(false)}
@@ -446,6 +589,14 @@ export default function MembersPage() {
         confirmText="Deactivate"
         loading={formLoading}
         destructive
+      />
+
+      <AddExpenseDialog
+        open={showAddExpense}
+        onClose={() => { setShowAddExpense(false); setExpenseMemberId(undefined); }}
+        onSuccess={fetchMembers}
+        mode="admin"
+        defaultMemberId={expenseMemberId}
       />
     </div>
   );
