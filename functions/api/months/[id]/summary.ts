@@ -1,0 +1,72 @@
+// ============================================
+// /api/months/[id]/summary — GET financial summary
+// ============================================
+import { json, errorResponse, authenticate } from '../../_shared';
+
+interface Env {
+  DB: D1Database;
+}
+
+export const onRequestGet: PagesFunction<Env> = async ({ request, env, params }) => {
+  const db = env.DB;
+  const auth = await authenticate(request, db);
+  if (!auth) return errorResponse('Unauthorized', 401);
+
+  const monthId = params.id;
+
+  const month = await db.prepare('SELECT * FROM mess_months WHERE id = ?').bind(monthId).first();
+  if (!month) return errorResponse('Month not found', 404);
+
+  // Total collected (sum of amount_paid from month_members)
+  const collected = await db
+    .prepare('SELECT COALESCE(SUM(amount_paid), 0) as total FROM month_members WHERE month_id = ?')
+    .bind(monthId)
+    .first<{ total: number }>();
+
+  // Total spent (sum of expenses)
+  const spent = await db
+    .prepare('SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE month_id = ?')
+    .bind(monthId)
+    .first<{ total: number }>();
+
+  // Member counts
+  const memberCount = await db
+    .prepare('SELECT COUNT(*) as total FROM month_members WHERE month_id = ?')
+    .bind(monthId)
+    .first<{ total: number }>();
+
+  const paidCount = await db
+    .prepare("SELECT COUNT(*) as total FROM month_members WHERE month_id = ? AND payment_status = 'paid'")
+    .bind(monthId)
+    .first<{ total: number }>();
+
+  const unpaidCount = await db
+    .prepare("SELECT COUNT(*) as total FROM month_members WHERE month_id = ? AND payment_status != 'paid'")
+    .bind(monthId)
+    .first<{ total: number }>();
+
+  // Calculate daily average
+  const totalSpent = spent?.total || 0;
+  const monthYear = (month as any).month_year as string;
+  const [year, m] = monthYear.split('-');
+  const daysInMonth = new Date(parseInt(year), parseInt(m), 0).getDate();
+  const today = new Date();
+  const currentDay = today.getFullYear() === parseInt(year) && (today.getMonth() + 1) === parseInt(m)
+    ? today.getDate()
+    : daysInMonth;
+  const dailyAverage = currentDay > 0 ? totalSpent / currentDay : 0;
+
+  return json({
+    success: true,
+    data: {
+      month,
+      total_collected: collected?.total || 0,
+      total_spent: totalSpent,
+      balance: (collected?.total || 0) - totalSpent,
+      daily_average: Math.round(dailyAverage * 100) / 100,
+      member_count: memberCount?.total || 0,
+      paid_count: paidCount?.total || 0,
+      unpaid_count: unpaidCount?.total || 0,
+    },
+  });
+};

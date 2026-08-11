@@ -1,0 +1,414 @@
+// ============================================
+// Admin — Expense History Page
+// ============================================
+import { useState, useEffect } from 'react';
+import {
+  Search,
+  Edit,
+  Trash2,
+  MoreHorizontal,
+  ChevronLeft,
+  ChevronRight,
+  ArrowUpDown,
+  Filter,
+  Download,
+} from 'lucide-react';
+import { api, formatCurrency, formatDate, formatDateTime, buildQueryString } from '../../lib/api';
+import type { Expense, ExpenseCategory, Member } from '../../types';
+import { useToast } from '../../contexts/ToastContext';
+import Dialog from '../../components/ui/Dialog';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
+
+export default function ExpensesPage() {
+  const toast = useToast();
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [total, setTotal] = useState(0);
+  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionDropdown, setActionDropdown] = useState<number | null>(null);
+
+  // Filters
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [memberFilter, setMemberFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const limit = 20;
+
+  // Edit state
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [formLoading, setFormLoading] = useState(false);
+  const [editForm, setEditForm] = useState({
+    amount: '',
+    date: '',
+    description: '',
+    category_id: '',
+  });
+
+  useEffect(() => {
+    fetchCategories();
+    fetchMembers();
+  }, []);
+
+  useEffect(() => {
+    fetchExpenses();
+  }, [search, categoryFilter, memberFilter, dateFrom, dateTo, page, sortBy, sortOrder]);
+
+  useEffect(() => {
+    const handleClick = () => setActionDropdown(null);
+    if (actionDropdown !== null) {
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }
+  }, [actionDropdown]);
+
+  const fetchExpenses = async () => {
+    setLoading(true);
+    const query = buildQueryString({
+      search,
+      category_id: categoryFilter,
+      created_by: memberFilter,
+      date_from: dateFrom,
+      date_to: dateTo,
+      page,
+      limit,
+      sort_by: sortBy,
+      sort_order: sortOrder,
+    });
+    const res = await api.get<Expense[]>(`/expenses${query}`);
+    if (res.success && res.data) {
+      setExpenses(res.data);
+      setTotal(res.total || 0);
+    }
+    setLoading(false);
+  };
+
+  const fetchCategories = async () => {
+    const res = await api.get<ExpenseCategory[]>('/categories');
+    if (res.success && res.data) setCategories(res.data);
+  };
+
+  const fetchMembers = async () => {
+    const res = await api.get<Member[]>('/members');
+    if (res.success && res.data) setMembers(res.data);
+  };
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(column);
+      setSortOrder('desc');
+    }
+    setPage(1);
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedExpense) return;
+    setFormLoading(true);
+    const res = await api.put(`/expenses/${selectedExpense.id}`, {
+      amount: parseFloat(editForm.amount),
+      date: editForm.date,
+      description: editForm.description,
+      category_id: editForm.category_id ? parseInt(editForm.category_id) : null,
+    });
+    if (res.success) {
+      toast.success('Expense updated');
+      setShowEditDialog(false);
+      fetchExpenses();
+    } else {
+      toast.error(res.error || 'Failed to update');
+    }
+    setFormLoading(false);
+  };
+
+  const handleDelete = async () => {
+    if (!selectedExpense) return;
+    setFormLoading(true);
+    const res = await api.delete(`/expenses/${selectedExpense.id}`);
+    if (res.success) {
+      toast.success('Expense deleted');
+      setShowDeleteDialog(false);
+      fetchExpenses();
+    } else {
+      toast.error(res.error || 'Failed to delete');
+    }
+    setFormLoading(false);
+  };
+
+  const openEdit = (expense: Expense) => {
+    setSelectedExpense(expense);
+    setEditForm({
+      amount: String(expense.amount),
+      date: expense.date,
+      description: expense.description,
+      category_id: expense.category_id ? String(expense.category_id) : '',
+    });
+    setShowEditDialog(true);
+    setActionDropdown(null);
+  };
+
+  const openDelete = (expense: Expense) => {
+    setSelectedExpense(expense);
+    setShowDeleteDialog(true);
+    setActionDropdown(null);
+  };
+
+  const totalPages = Math.ceil(total / limit);
+  const totalAmount = expenses.reduce((sum, e) => sum + e.amount, 0);
+
+  return (
+    <div>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1>Expense History</h1>
+          <p className="text-sm text-muted">
+            {total} expense{total !== 1 ? 's' : ''} found
+            {totalAmount > 0 && ` · Total: ${formatCurrency(totalAmount)}`}
+          </p>
+        </div>
+      </div>
+
+      <div className="card animate-fade-in">
+        {/* Filters */}
+        <div className="filter-bar">
+          <div className="search-bar">
+            <Search size={16} className="search-icon" />
+            <input
+              className="input"
+              placeholder="Search expenses..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              style={{ maxWidth: '16rem' }}
+            />
+          </div>
+          <select
+            className="select"
+            value={categoryFilter}
+            onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
+          >
+            <option value="">All Categories</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <select
+            className="select"
+            value={memberFilter}
+            onChange={(e) => { setMemberFilter(e.target.value); setPage(1); }}
+          >
+            <option value="">All Members</option>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+          <input
+            className="input"
+            type="date"
+            value={dateFrom}
+            onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+            placeholder="From"
+            title="Date from"
+          />
+          <input
+            className="input"
+            type="date"
+            value={dateTo}
+            onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+            placeholder="To"
+            title="Date to"
+          />
+          {(search || categoryFilter || memberFilter || dateFrom || dateTo) && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setSearch(''); setCategoryFilter(''); setMemberFilter('');
+                setDateFrom(''); setDateTo(''); setPage(1);
+              }}
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+
+        {/* Table */}
+        <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th className={`sortable ${sortBy === 'date' ? 'sorted' : ''}`} onClick={() => handleSort('date')}>
+                  Date <ArrowUpDown size={12} style={{ display: 'inline', marginLeft: '0.25rem' }} />
+                </th>
+                <th className={`sortable ${sortBy === 'amount' ? 'sorted' : ''}`} onClick={() => handleSort('amount')}>
+                  Amount <ArrowUpDown size={12} style={{ display: 'inline', marginLeft: '0.25rem' }} />
+                </th>
+                <th>Description</th>
+                <th>Category</th>
+                <th>Created By</th>
+                <th>Created At</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: 8 }).map((_, j) => (
+                      <td key={j}><div className="skeleton skeleton-text" style={{ width: '80%' }} /></td>
+                    ))}
+                  </tr>
+                ))
+              ) : expenses.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="table-empty">No expenses found</td>
+                </tr>
+              ) : (
+                expenses.map((expense) => (
+                  <tr key={expense.id}>
+                    <td className="text-muted text-sm">#{expense.id}</td>
+                    <td>{formatDate(expense.date)}</td>
+                    <td className="amount">{formatCurrency(expense.amount)}</td>
+                    <td>
+                      <span className="text-sm">{expense.description || '—'}</span>
+                    </td>
+                    <td>
+                      <span className="badge badge-secondary">{expense.category_name || 'Other'}</span>
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <div className="avatar avatar-sm">{expense.creator_name?.charAt(0) || '?'}</div>
+                        <span className="text-sm">{expense.creator_name}</span>
+                      </div>
+                    </td>
+                    <td className="text-sm text-muted">{formatDateTime(expense.created_at)}</td>
+                    <td>
+                      <div className="dropdown">
+                        <button
+                          className="btn btn-ghost btn-icon btn-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActionDropdown(actionDropdown === expense.id ? null : expense.id);
+                          }}
+                        >
+                          <MoreHorizontal size={16} />
+                        </button>
+                        {actionDropdown === expense.id && (
+                          <div className="dropdown-menu">
+                            <button className="dropdown-item" onClick={() => openEdit(expense)}>
+                              <Edit size={14} /> Edit
+                            </button>
+                            <div className="dropdown-separator" />
+                            <button className="dropdown-item destructive" onClick={() => openDelete(expense)}>
+                              <Trash2 size={14} /> Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="pagination">
+            <span className="pagination-info">
+              Showing {(page - 1) * limit + 1}–{Math.min(page * limit, total)} of {total}
+            </span>
+            <div className="pagination-controls">
+              <button
+                className="pagination-btn"
+                disabled={page <= 1}
+                onClick={() => setPage(page - 1)}
+              >
+                <ChevronLeft size={14} />
+              </button>
+              {Array.from({ length: Math.min(totalPages, 5) }).map((_, i) => {
+                const pageNum = i + 1;
+                return (
+                  <button
+                    key={pageNum}
+                    className={`pagination-btn ${page === pageNum ? 'active' : ''}`}
+                    onClick={() => setPage(pageNum)}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+              <button
+                className="pagination-btn"
+                disabled={page >= totalPages}
+                onClick={() => setPage(page + 1)}
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Edit Dialog */}
+      <Dialog
+        open={showEditDialog}
+        onClose={() => setShowEditDialog(false)}
+        title="Edit Expense"
+        footer={
+          <>
+            <button className="btn btn-outline" onClick={() => setShowEditDialog(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleEdit} disabled={formLoading || !editForm.amount}>
+              {formLoading ? 'Saving...' : 'Save Changes'}
+            </button>
+          </>
+        }
+      >
+        <form onSubmit={handleEdit} className="flex flex-col gap-4">
+          <div className="input-group">
+            <label className="input-label">Amount (AED) *</label>
+            <input className="input" type="number" step="0.01" min="0" value={editForm.amount} onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })} required />
+          </div>
+          <div className="input-group">
+            <label className="input-label">Date *</label>
+            <input className="input" type="date" value={editForm.date} onChange={(e) => setEditForm({ ...editForm, date: e.target.value })} required />
+          </div>
+          <div className="input-group">
+            <label className="input-label">Category</label>
+            <select className="select" value={editForm.category_id} onChange={(e) => setEditForm({ ...editForm, category_id: e.target.value })}>
+              <option value="">Select category</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="input-group">
+            <label className="input-label">Description</label>
+            <textarea className="textarea" placeholder="Describe the expense..." value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+          </div>
+        </form>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+        onConfirm={handleDelete}
+        title="Delete Expense"
+        message={`Delete expense #${selectedExpense?.id} for ${selectedExpense ? formatCurrency(selectedExpense.amount) : ''}?`}
+        warning="This action cannot be undone. The monthly balance will be recalculated."
+        confirmText="Delete"
+        loading={formLoading}
+        destructive
+      />
+    </div>
+  );
+}
