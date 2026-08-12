@@ -4,5 +4,5 @@ pages_build_output_dir = "./dist"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "baraha-mess-db"
+database_name = "baraha-mess-db2"
 database_id = "YOUR_DATABASE_ID_HERE"
