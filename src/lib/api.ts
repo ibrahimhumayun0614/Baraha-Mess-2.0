@@ -26,7 +26,27 @@ async function request<T>(
       headers,
     });
 
-    const data = await response.json();
+    const contentType = response.headers.get('content-type') || '';
+    const text = await response.text();
+
+    if (!contentType.includes('application/json')) {
+      return {
+        success: false,
+        error: response.status === 404
+          ? 'API route not found. Check that Pages Functions deployed successfully.'
+          : `API returned non-JSON (HTTP ${response.status}). Functions may not be bound or D1 may be missing.`,
+      };
+    }
+
+    let data: ApiResponse<T>;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return {
+        success: false,
+        error: 'Invalid JSON from API',
+      };
+    }
 
     if (!response.ok) {
       return {

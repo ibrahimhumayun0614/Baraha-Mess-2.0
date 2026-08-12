@@ -2,6 +2,10 @@ name = "baraha-mess"
 compatibility_date = "2024-12-01"
 pages_build_output_dir = "./dist"
 
+# Set ADMIN_PASSWORD in Cloudflare Pages → Settings → Environment variables
+# (as a Secret). For local: create .dev.vars with ADMIN_PASSWORD=yourpassword
+# [vars] should not contain the real password.
+
 [[d1_databases]]
 binding = "DB"
 database_name = "baraha-mess-db2"

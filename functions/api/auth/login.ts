@@ -5,6 +5,7 @@ import { json, errorResponse, generateToken, logActivity } from '../_shared';
 
 interface Env {
   DB: D1Database;
+  ADMIN_PASSWORD: string;
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
@@ -12,21 +13,38 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const body = await request.json() as { type: string; password?: string; member_id?: number };
 
   if (body.type === 'admin') {
-    // Admin login with password
     if (!body.password) {
       return errorResponse('Password is required');
     }
 
-    const admin = await db
-      .prepare('SELECT * FROM admins WHERE username = ? AND password_hash = ?')
-      .bind('admin', body.password)
-      .first<{ id: number; username: string }>();
+    if (!env.ADMIN_PASSWORD) {
+      return errorResponse('Admin password is not configured on the server', 500);
+    }
 
-    if (!admin) {
+    if (body.password !== env.ADMIN_PASSWORD) {
       return errorResponse('Invalid password', 401);
     }
 
-    // Create session
+    // Ensure admin row exists for sessions / activity logs
+    let admin = await db
+      .prepare('SELECT id, username FROM admins WHERE username = ?')
+      .bind('admin')
+      .first<{ id: number; username: string }>();
+
+    if (!admin) {
+      await db
+        .prepare("INSERT INTO admins (username, password_hash) VALUES ('admin', 'env')")
+        .run();
+      admin = await db
+        .prepare('SELECT id, username FROM admins WHERE username = ?')
+        .bind('admin')
+        .first<{ id: number; username: string }>();
+    }
+
+    if (!admin) {
+      return errorResponse('Failed to initialize admin account', 500);
+    }
+
     const token = generateToken();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
 

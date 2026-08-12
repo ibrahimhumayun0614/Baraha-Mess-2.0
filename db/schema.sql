@@ -136,11 +136,12 @@ CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 
 -- ============================================
--- Seed Data: Default Admin (password: admin123)
--- Password hash is a simple hash for demo — replace with bcrypt in production
+-- Seed Data: Default Admin
+-- Password is NOT stored here — set ADMIN_PASSWORD
+-- as a Cloudflare Pages environment variable / secret
 -- ============================================
 INSERT OR IGNORE INTO admins (username, password_hash) 
-VALUES ('admin', 'admin123');
+VALUES ('admin', 'env');
 
 -- ============================================
 -- Seed Data: Default Expense Categories
