@@ -12,7 +12,6 @@ import {
   ArrowUpDown,
 } from 'lucide-react';
 import { api, formatCurrency, formatDate, formatDateTime, formatMonthYear, buildQueryString } from '../../lib/api';
-import { DEMO_MEMBERS, DEMO_MONTHS, filterDemoExpenses } from '../../lib/demoData';
 import type { Expense, Member, MessMonth } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import Dialog from '../../components/ui/Dialog';
@@ -97,19 +96,8 @@ export default function ExpensesPage() {
       setExpenses(res.data);
       setTotal(res.total || 0);
     } else {
-      const demo = filterDemoExpenses({
-        search,
-        created_by: memberFilter,
-        month_id: monthFilter || undefined,
-        date_from: dateFrom,
-        date_to: dateTo,
-        page,
-        limit,
-        sort_by: sortBy,
-        sort_order: sortOrder,
-      });
-      setExpenses(demo.data);
-      setTotal(demo.total);
+      setExpenses([]);
+      setTotal(0);
     }
     setLoading(false);
   };
@@ -117,7 +105,7 @@ export default function ExpensesPage() {
   const fetchMembers = async () => {
     const res = await api.get<Member[]>('/members');
     if (res.success && res.data) setMembers(res.data);
-    else setMembers(DEMO_MEMBERS.filter((m) => m.status === 'active'));
+    else setMembers([]);
   };
 
   const fetchMonths = async () => {
@@ -127,9 +115,7 @@ export default function ExpensesPage() {
       const active = res.data.find((m) => m.status === 'active');
       if (active && !monthFilter) setMonthFilter(String(active.id));
     } else {
-      setMonths(DEMO_MONTHS);
-      const active = DEMO_MONTHS.find((m) => m.status === 'active');
-      if (active && !monthFilter) setMonthFilter(String(active.id));
+      setMonths([]);
     }
   };
 

@@ -6,7 +6,6 @@ import { useNavigate } from 'react-router-dom';
 import { Lock, User, AlertCircle, ChevronDown, LogIn } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
-import { DEMO_MEMBERS } from '../lib/demoData';
 import type { Member } from '../types';
 import Select from '../components/ui/Select';
 
@@ -32,10 +31,8 @@ export default function LoginPage() {
   useEffect(() => {
     const fetchMembers = async () => {
       const res = await api.get<Member[]>('/members/active');
-      if (res.success && res.data && res.data.length > 0) {
+      if (res.success && res.data) {
         setMembers(res.data);
-      } else {
-        setMembers(DEMO_MEMBERS.filter((m) => m.status === 'active'));
       }
     };
     fetchMembers();

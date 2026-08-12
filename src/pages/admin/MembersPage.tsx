@@ -4,7 +4,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Search, MoreHorizontal } from 'lucide-react';
 import { api, formatCurrency } from '../../lib/api';
-import { DEMO_MEMBERS, DEMO_MONTH_MEMBERS, isDemoToken } from '../../lib/demoData';
 import type { Member, MonthMember } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import Dialog from '../../components/ui/Dialog';
@@ -55,13 +54,13 @@ export default function MembersPage() {
     if (res.success && res.data) {
       setMembers(res.data);
     } else {
-      setMembers(DEMO_MEMBERS);
+      setMembers([]);
     }
     const mmRes = await api.get<MonthMember[]>('/dashboard/members');
     if (mmRes.success && mmRes.data) {
       setMonthMembers(mmRes.data);
     } else {
-      setMonthMembers(DEMO_MONTH_MEMBERS);
+      setMonthMembers([]);
     }
     setLoading(false);
   };
@@ -75,12 +74,6 @@ export default function MembersPage() {
     return String(fromMonth ?? 500);
   };
 
-  const applyPaymentStatus = (contribution: number, paid: number): MonthMember['payment_status'] => {
-    if (paid >= contribution) return 'paid';
-    if (paid > 0) return 'partial';
-    return 'unpaid';
-  };
-
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormLoading(true);
@@ -91,41 +84,11 @@ export default function MembersPage() {
       email: '',
     });
 
-    const demo = isDemoToken(localStorage.getItem('baraha_token'));
-    if (res.success || demo) {
-      const contribution = parseFloat(form.monthly_amount || defaultMonthlyAmount()) || 500;
+    if (res.success) {
       const paid = parseFloat(form.amount_paid || '0') || 0;
       const memberId = res.data?.id;
 
-      if (demo && !res.success) {
-        const newId = Math.max(0, ...members.map((m) => m.id)) + 1;
-        const now = new Date().toISOString();
-        const newMember: Member = {
-          id: newId,
-          name: form.name,
-          member_id: form.member_id,
-          phone: '',
-          email: '',
-          status: 'active',
-          created_at: now,
-          updated_at: now,
-        };
-        setMembers((prev) => [...prev, newMember]);
-        setMonthMembers((prev) => [
-          ...prev,
-          {
-            id: Math.max(0, ...prev.map((m) => m.id)) + 1,
-            month_id: prev[0]?.month_id || 3,
-            member_id: newId,
-            contribution_amount: contribution,
-            payment_status: applyPaymentStatus(contribution, paid),
-            amount_paid: paid,
-            created_at: now,
-            member_name: form.name,
-            member_member_id: form.member_id,
-          },
-        ]);
-      } else if (memberId && paid > 0) {
+      if (memberId && paid > 0) {
         const mmRes = await api.get<MonthMember[]>('/dashboard/members');
         const mm = mmRes.data?.find((m) => m.member_id === memberId);
         if (mm) {
@@ -136,11 +99,8 @@ export default function MembersPage() {
             notes: '',
           });
         }
-        await fetchMembers();
-      } else {
-        await fetchMembers();
       }
-
+      await fetchMembers();
       toast.success('Member created successfully');
       setShowCreateDialog(false);
       setForm({ name: '', member_id: '', monthly_amount: '', amount_paid: '' });
@@ -162,8 +122,7 @@ export default function MembersPage() {
       email: '',
     });
 
-    const demo = isDemoToken(localStorage.getItem('baraha_token'));
-    if (!(res.success || demo)) {
+    if (!res.success) {
       toast.error(res.error || 'Failed to update member');
       setFormLoading(false);
       return;
@@ -171,54 +130,21 @@ export default function MembersPage() {
 
     const payAmount = parseFloat(form.amount_paid || '0') || 0;
 
-    if (demo && !res.success) {
-      setMembers((prev) =>
-        prev.map((m) =>
-          m.id === selectedMember.id
-            ? { ...m, name: form.name, member_id: form.member_id, updated_at: new Date().toISOString() }
-            : m
-        )
-      );
-      if (selectedMonthMember && payAmount > 0) {
-        setMonthMembers((prev) =>
-          prev.map((mm) => {
-            if (mm.id !== selectedMonthMember.id) return mm;
-            const amountPaid = mm.amount_paid + payAmount;
-            return {
-              ...mm,
-              amount_paid: amountPaid,
-              payment_status: applyPaymentStatus(mm.contribution_amount, amountPaid),
-              member_name: form.name,
-              member_member_id: form.member_id,
-            };
-          })
-        );
-      } else {
-        setMonthMembers((prev) =>
-          prev.map((mm) =>
-            mm.member_id === selectedMember.id
-              ? { ...mm, member_name: form.name, member_member_id: form.member_id }
-              : mm
-          )
-        );
+    if (selectedMonthMember && payAmount > 0) {
+      const payRes = await api.post('/payments', {
+        month_member_id: selectedMonthMember.id,
+        amount: payAmount,
+        payment_date: new Date().toISOString().split('T')[0],
+        notes: '',
+      });
+      if (!payRes.success) {
+        toast.error(payRes.error || 'Member updated, but payment failed');
+        setFormLoading(false);
+        fetchMembers();
+        return;
       }
-    } else {
-      if (selectedMonthMember && payAmount > 0) {
-        const payRes = await api.post('/payments', {
-          month_member_id: selectedMonthMember.id,
-          amount: payAmount,
-          payment_date: new Date().toISOString().split('T')[0],
-          notes: '',
-        });
-        if (!(payRes.success || demo)) {
-          toast.error(payRes.error || 'Member updated, but payment failed');
-          setFormLoading(false);
-          fetchMembers();
-          return;
-        }
-      }
-      await fetchMembers();
     }
+    await fetchMembers();
 
     toast.success(payAmount > 0 ? 'Member and payment updated' : 'Member updated successfully');
     setShowEditDialog(false);
@@ -229,17 +155,8 @@ export default function MembersPage() {
     if (!selectedMember) return;
     setFormLoading(true);
     const res = await api.delete(`/members/${selectedMember.id}`);
-    const demo = isDemoToken(localStorage.getItem('baraha_token'));
-    if (res.success || demo) {
-      if (demo && !res.success) {
-        setMembers((prev) =>
-          prev.map((m) =>
-            m.id === selectedMember.id ? { ...m, status: 'inactive' } : m
-          )
-        );
-      } else {
-        await fetchMembers();
-      }
+    if (res.success) {
+      await fetchMembers();
       toast.success('Member deactivated');
       setShowDeleteDialog(false);
     } else {

@@ -3,7 +3,6 @@
 // ============================================
 import { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
-import { DEMO_MEMBERS, isDemoToken } from '../../lib/demoData';
 import type { Member } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -63,7 +62,7 @@ export default function AddExpenseDialog({
       if (memRes.success && memRes.data) {
         setMembers(memRes.data.filter((m) => m.status === 'active'));
       } else {
-        setMembers(DEMO_MEMBERS.filter((m) => m.status === 'active'));
+        setMembers([]);
       }
     };
     load();
@@ -97,7 +96,7 @@ export default function AddExpenseDialog({
 
     const res = await api.post('/expenses', payload);
 
-    if (res.success || isDemoToken(localStorage.getItem('baraha_token'))) {
+    if (res.success) {
       toast.success('Expense added successfully');
       onClose();
       onSuccess?.();

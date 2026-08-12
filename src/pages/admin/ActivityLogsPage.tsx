@@ -18,7 +18,6 @@ import {
   Activity,
 } from 'lucide-react';
 import { api, formatDateTime, buildQueryString } from '../../lib/api';
-import { filterDemoActivityLogs } from '../../lib/demoData';
 import type { ActivityLog } from '../../types';
 import Select from '../../components/ui/Select';
 
@@ -76,15 +75,8 @@ export default function ActivityLogsPage() {
       setLogs(res.data);
       setTotal(res.total || 0);
     } else {
-      const demo = filterDemoActivityLogs({
-        search,
-        action_type: actionType,
-        actor_type: actorType,
-        page,
-        limit,
-      });
-      setLogs(demo.data);
-      setTotal(demo.total);
+      setLogs([]);
+      setTotal(0);
     }
     setLoading(false);
   };

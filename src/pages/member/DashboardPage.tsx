@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Wallet, ArrowRight } from 'lucide-react';
 import { api, formatCurrency, formatDate, formatMonthYear } from '../../lib/api';
-import { getDemoMemberDashboard } from '../../lib/demoData';
 import type { MemberDashboardStats, Expense } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import AddExpenseDialog from '../../components/expenses/AddExpenseDialog';
@@ -27,7 +26,7 @@ export default function MemberDashboardPage() {
     if (res.success && res.data) {
       setStats(res.data);
     } else {
-      setStats(getDemoMemberDashboard(user?.id || 1, user?.name || 'Mohamed Ibrahim'));
+      setStats(null);
     }
     setLoading(false);
   };

@@ -17,14 +17,11 @@ import {
   Receipt,
 } from 'lucide-react';
 import { api, formatCurrency, formatDate, formatMonthYear } from '../../lib/api';
-import { DEMO_DASHBOARD, DEMO_MONTH_MEMBERS } from '../../lib/demoData';
 import type { DashboardStats, Expense, MonthMember } from '../../types';
-import { useToast } from '../../contexts/ToastContext';
 import AddExpenseDialog from '../../components/expenses/AddExpenseDialog';
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
-  const toast = useToast();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [members, setMembers] = useState<MonthMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,14 +37,14 @@ export default function AdminDashboardPage() {
     if (res.success && res.data) {
       setStats(res.data);
     } else {
-      setStats(DEMO_DASHBOARD);
+      setStats(null);
     }
 
     const membersRes = await api.get<MonthMember[]>('/dashboard/members');
-    if (membersRes.success && membersRes.data && membersRes.data.length > 0) {
+    if (membersRes.success && membersRes.data) {
       setMembers(membersRes.data);
     } else {
-      setMembers(DEMO_MONTH_MEMBERS);
+      setMembers([]);
     }
     setLoading(false);
   };

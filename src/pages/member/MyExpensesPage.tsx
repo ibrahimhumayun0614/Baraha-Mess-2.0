@@ -10,7 +10,6 @@ import {
   ArrowUpDown,
 } from 'lucide-react';
 import { api, formatCurrency, formatDate, buildQueryString } from '../../lib/api';
-import { filterDemoExpenses } from '../../lib/demoData';
 import type { Expense } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import AddExpenseDialog from '../../components/expenses/AddExpenseDialog';
@@ -51,19 +50,8 @@ export default function MyExpensesPage() {
       setExpenses(res.data);
       setTotal(res.total || 0);
     } else {
-      const demo = filterDemoExpenses({
-        search,
-        date_from: dateFrom,
-        date_to: dateTo,
-        page,
-        limit,
-        sort_by: sortBy,
-        sort_order: sortOrder,
-        mine: true,
-        memberId: user?.id || 1,
-      });
-      setExpenses(demo.data);
-      setTotal(demo.total);
+      setExpenses([]);
+      setTotal(0);
     }
     setLoading(false);
   };
