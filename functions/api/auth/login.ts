@@ -1,11 +1,11 @@
 // ============================================
 // POST /api/auth/login — Admin or Member login
 // ============================================
-import { json, errorResponse, generateToken, logActivity } from '../_shared';
+import { json, errorResponse, generateToken, logActivity, hashPassword, verifyPassword } from '../_shared';
 
 interface Env {
   DB: D1Database;
-  ADMIN_PASSWORD: string;
+  ADMIN_PASSWORD?: string;
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
@@ -17,33 +17,45 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return errorResponse('Password is required');
     }
 
-    if (!env.ADMIN_PASSWORD) {
-      return errorResponse('Admin password is not configured on the server', 500);
-    }
-
-    if (body.password !== env.ADMIN_PASSWORD) {
-      return errorResponse('Invalid password', 401);
-    }
-
-    // Ensure admin row exists for sessions / activity logs
+    // Ensure admin row exists and fetch stored password hash
     let admin = await db
-      .prepare('SELECT id, username FROM admins WHERE username = ?')
+      .prepare('SELECT id, username, password_hash FROM admins WHERE username = ?')
       .bind('admin')
-      .first<{ id: number; username: string }>();
+      .first<{ id: number; username: string; password_hash: string }>();
 
-    if (!admin) {
-      await db
-        .prepare("INSERT INTO admins (username, password_hash) VALUES ('admin', 'env')")
-        .run();
+    // Migration / initial seeding check:
+    // If admin doesn't exist, or hash is placeholder ('env' or plain text), hash initial password into database.
+    if (!admin || admin.password_hash === 'env' || !admin.password_hash.includes(':')) {
+      const initialPassword = env.ADMIN_PASSWORD || 'admin123';
+      const initialHash = await hashPassword(initialPassword);
+
+      if (!admin) {
+        await db
+          .prepare("INSERT INTO admins (username, password_hash) VALUES ('admin', ?)")
+          .bind(initialHash)
+          .run();
+      } else {
+        await db
+          .prepare("UPDATE admins SET password_hash = ? WHERE username = 'admin'")
+          .bind(initialHash)
+          .run();
+      }
+
       admin = await db
-        .prepare('SELECT id, username FROM admins WHERE username = ?')
+        .prepare('SELECT id, username, password_hash FROM admins WHERE username = ?')
         .bind('admin')
-        .first<{ id: number; username: string }>();
+        .first<{ id: number; username: string; password_hash: string }>();
     }
 
     if (!admin) {
       return errorResponse('Failed to initialize admin account', 500);
     }
+
+    const isValid = await verifyPassword(body.password, admin.password_hash);
+    if (!isValid) {
+      return errorResponse('Invalid password', 401);
+    }
+
 
     const token = generateToken();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
