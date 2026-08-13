@@ -2,7 +2,8 @@
 // Change Admin Password Modal Component
 // ============================================
 import React, { useState } from 'react';
-import { KeyRound, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { CheckCircle, AlertCircle } from 'lucide-react';
+import Dialog from '../ui/Dialog';
 import { api } from '../../lib/api';
 
 interface ChangePasswordModalProps {
@@ -17,8 +18,6 @@ export default function ChangePasswordModal({ isOpen, onClose }: ChangePasswordM
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-
-  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,90 +58,78 @@ export default function ChangePasswordModal({ isOpen, onClose }: ChangePasswordM
     }
   };
 
+  const footer = (
+    <>
+      <button type="button" className="btn btn-outline" onClick={onClose} disabled={loading}>
+        Cancel
+      </button>
+      <button type="submit" form="change-password-form" className="btn btn-primary" disabled={loading}>
+        {loading ? 'Updating...' : 'Update Password'}
+      </button>
+    </>
+  );
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '420px' }}>
-        <div className="modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <KeyRound size={20} className="text-primary" />
-            <h3 className="modal-title">Change Admin Password</h3>
+    <Dialog open={isOpen} onClose={onClose} title="Change Admin Password" footer={footer}>
+      <form id="change-password-form" onSubmit={handleSubmit}>
+        {error && (
+          <div className="alert alert-error mb-4" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '0.5rem', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontSize: '0.875rem' }}>
+            <AlertCircle size={16} />
+            <span>{error}</span>
           </div>
-          <button className="btn-icon text-muted" onClick={onClose}>
-            <X size={18} />
-          </button>
+        )}
+        {success && (
+          <div className="alert alert-success mb-4" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '0.5rem', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', fontSize: '0.875rem' }}>
+            <CheckCircle size={16} />
+            <span>{success}</span>
+          </div>
+        )}
+
+        <div className="form-group">
+          <label className="input-label" htmlFor="current-password">
+            Current Password
+          </label>
+          <input
+            id="current-password"
+            type="password"
+            className="input"
+            placeholder="Enter current password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            required
+          />
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="modal-body">
-            {error && (
-              <div className="alert alert-error mb-4" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '0.5rem', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', fontSize: '0.875rem' }}>
-                <AlertCircle size={16} />
-                <span>{error}</span>
-              </div>
-            )}
-            {success && (
-              <div className="alert alert-success mb-4" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem', borderRadius: '0.5rem', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', fontSize: '0.875rem' }}>
-                <CheckCircle size={16} />
-                <span>{success}</span>
-              </div>
-            )}
+        <div className="form-group mt-3">
+          <label className="input-label" htmlFor="new-password">
+            New Password
+          </label>
+          <input
+            id="new-password"
+            type="password"
+            className="input"
+            placeholder="Enter new password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            required
+          />
+        </div>
 
-            <div className="form-group">
-              <label className="input-label" htmlFor="current-password">
-                Current Password
-              </label>
-              <input
-                id="current-password"
-                type="password"
-                className="input"
-                placeholder="Enter current password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="form-group mt-3">
-              <label className="input-label" htmlFor="new-password">
-                New Password
-              </label>
-              <input
-                id="new-password"
-                type="password"
-                className="input"
-                placeholder="Enter new password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="form-group mt-3">
-              <label className="input-label" htmlFor="confirm-password">
-                Confirm New Password
-              </label>
-              <input
-                id="confirm-password"
-                type="password"
-                className="input"
-                placeholder="Re-enter new password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={onClose} disabled={loading}>
-              Cancel
-            </button>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Updating...' : 'Update Password'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="form-group mt-3">
+          <label className="input-label" htmlFor="confirm-password">
+            Confirm New Password
+          </label>
+          <input
+            id="confirm-password"
+            type="password"
+            className="input"
+            placeholder="Re-enter new password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+          />
+        </div>
+      </form>
+    </Dialog>
   );
 }

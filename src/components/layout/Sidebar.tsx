@@ -98,7 +98,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             </div>
           </div>
           {isAdmin && (
-            <button className="sidebar-link" onClick={() => setShowPasswordModal(true)}>
+            <button
+              className="sidebar-link"
+              onClick={() => {
+                setShowPasswordModal(true);
+                onClose();
+              }}
+            >
               <KeyRound className="sidebar-link-icon" size={18} />
               <span className="sidebar-link-text">Change Password</span>
             </button>
