@@ -1,7 +1,7 @@
 // ============================================
 // POST /api/auth/login — Admin or Member login
 // ============================================
-import { json, errorResponse, generateToken, logActivity, hashPassword, verifyPassword } from '../_shared';
+import { json, errorResponse, generateToken, logActivity, hashPassword, verifyPassword, ensureAuthTables } from '../_shared';
 
 interface Env {
   DB: D1Database;
@@ -15,7 +15,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       return errorResponse('Database binding (DB) is missing', 500);
     }
 
+    // Auto-create required tables if not present yet
+    await ensureAuthTables(db);
+
     const body = await request.json() as { type: string; password?: string; member_id?: number };
+
 
     if (body.type === 'admin') {
       if (!body.password) {

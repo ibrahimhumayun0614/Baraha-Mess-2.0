@@ -137,4 +137,46 @@ function bytesToHex(bytes: Uint8Array): string {
     .join('');
 }
 
+// Ensure essential tables exist automatically if schema hasn't been executed
+export async function ensureAuthTables(db: D1Database): Promise<void> {
+  try {
+    await db.batch([
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS admins (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          token TEXT NOT NULL UNIQUE,
+          user_type TEXT NOT NULL CHECK(user_type IN ('admin', 'member')),
+          user_id INTEGER NOT NULL,
+          expires_at TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS activity_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          actor_type TEXT NOT NULL CHECK(actor_type IN ('admin', 'member')),
+          actor_id INTEGER NOT NULL,
+          action TEXT NOT NULL,
+          action_type TEXT NOT NULL,
+          details TEXT DEFAULT '',
+          reference_id INTEGER,
+          reference_type TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `),
+    ]);
+  } catch (e) {
+    // Ignore error if tables already exist
+  }
+}
+
+
 

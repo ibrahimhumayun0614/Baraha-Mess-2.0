@@ -1,7 +1,7 @@
 // ============================================
 // POST /api/auth/change-password — Admin password change
 // ============================================
-import { json, errorResponse, authenticate, hashPassword, verifyPassword, logActivity } from '../_shared';
+import { json, errorResponse, authenticate, hashPassword, verifyPassword, logActivity, ensureAuthTables } from '../_shared';
 
 interface Env {
   DB: D1Database;
@@ -13,6 +13,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     if (!db) {
       return errorResponse('Database binding (DB) is missing', 500);
     }
+
+    await ensureAuthTables(db);
+
 
     const auth = await authenticate(request, db);
 
