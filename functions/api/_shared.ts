@@ -44,6 +44,7 @@ export async function authenticate(request: Request, db: D1Database): Promise<{
   user_id: number;
   user_name: string;
 } | null> {
+  await ensureAuthTables(db);
   const token = getToken(request);
   if (!token) return null;
 
@@ -150,13 +151,73 @@ export async function ensureAuthTables(db: D1Database): Promise<void> {
         )
       `),
       db.prepare(`
-        CREATE TABLE IF NOT EXISTS sessions (
+        CREATE TABLE IF NOT EXISTS members (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          token TEXT NOT NULL UNIQUE,
-          user_type TEXT NOT NULL CHECK(user_type IN ('admin', 'member')),
-          user_id INTEGER NOT NULL,
-          expires_at TEXT NOT NULL,
-          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+          name TEXT NOT NULL,
+          member_id TEXT NOT NULL UNIQUE,
+          phone TEXT DEFAULT '',
+          email TEXT DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'inactive')),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS mess_months (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          month_year TEXT NOT NULL UNIQUE,
+          contribution_amount REAL NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'closed')),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          closed_at TEXT
+        )
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS month_members (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          month_id INTEGER NOT NULL,
+          member_id INTEGER NOT NULL,
+          contribution_amount REAL NOT NULL DEFAULT 0,
+          payment_status TEXT NOT NULL DEFAULT 'unpaid' CHECK(payment_status IN ('paid', 'unpaid', 'partial')),
+          amount_paid REAL NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (month_id) REFERENCES mess_months(id) ON DELETE CASCADE,
+          FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE,
+          UNIQUE(month_id, member_id)
+        )
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS payments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          month_member_id INTEGER NOT NULL,
+          amount REAL NOT NULL,
+          payment_date TEXT NOT NULL DEFAULT (date('now')),
+          notes TEXT DEFAULT '',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (month_member_id) REFERENCES month_members(id) ON DELETE CASCADE
+        )
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS expense_categories (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          icon TEXT DEFAULT 'tag'
+        )
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS expenses (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          month_id INTEGER NOT NULL,
+          created_by INTEGER NOT NULL,
+          amount REAL NOT NULL,
+          date TEXT NOT NULL DEFAULT (date('now')),
+          description TEXT DEFAULT '',
+          category_id INTEGER,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (month_id) REFERENCES mess_months(id) ON DELETE CASCADE,
+          FOREIGN KEY (created_by) REFERENCES members(id) ON DELETE CASCADE,
+          FOREIGN KEY (category_id) REFERENCES expense_categories(id) ON DELETE SET NULL
         )
       `),
       db.prepare(`
@@ -172,6 +233,28 @@ export async function ensureAuthTables(db: D1Database): Promise<void> {
           created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
       `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          token TEXT NOT NULL UNIQUE,
+          user_type TEXT NOT NULL CHECK(user_type IN ('admin', 'member')),
+          user_id INTEGER NOT NULL,
+          expires_at TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Groceries', 'shopping-cart')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Vegetables', 'carrot')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Meat', 'beef')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Rice', 'wheat')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Gas', 'flame')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Utilities', 'zap')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Fruits', 'apple')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Dairy', 'milk')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Spices', 'pepper')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Cleaning', 'sparkles')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Water', 'droplets')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Other', 'tag')"),
     ]);
   } catch (e) {
     // Ignore error if tables already exist
