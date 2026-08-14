@@ -23,7 +23,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const auth = await authenticate(request, db);
   if (!auth || auth.user_type !== 'admin') return errorResponse('Admin access required', 403);
 
-  const body = await request.json() as { name: string; member_id: string; phone?: string; email?: string };
+  const body = await request.json() as {
+    name: string;
+    member_id: string;
+    phone?: string;
+    email?: string;
+    contribution_amount?: number;
+    monthly_amount?: number;
+  };
 
   if (!body.name || !body.member_id) {
     return errorResponse('Name and Member ID are required');
@@ -35,19 +42,25 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       .bind(body.name, body.member_id, body.phone || '', body.email || '')
       .run();
 
-    // Auto-add to active month if exists
+    // Auto-add to active month if exists with custom or default contribution amount
     const activeMonth = await db
       .prepare("SELECT id, contribution_amount FROM mess_months WHERE status = 'active' ORDER BY id DESC LIMIT 1")
       .first<{ id: number; contribution_amount: number }>();
 
+    const memberContribution = (body.contribution_amount !== undefined && !isNaN(Number(body.contribution_amount)))
+      ? Number(body.contribution_amount)
+      : ((body.monthly_amount !== undefined && !isNaN(Number(body.monthly_amount)))
+        ? Number(body.monthly_amount)
+        : (activeMonth?.contribution_amount ?? 500));
+
     if (activeMonth && result.meta.last_row_id) {
       await db
         .prepare('INSERT OR IGNORE INTO month_members (month_id, member_id, contribution_amount) VALUES (?, ?, ?)')
-        .bind(activeMonth.id, result.meta.last_row_id, activeMonth.contribution_amount)
+        .bind(activeMonth.id, result.meta.last_row_id, memberContribution)
         .run();
     }
 
-    await logActivity(db, 'admin', auth.user_id, `Created member "${body.name}"`, 'create_member', body.member_id, result.meta.last_row_id as number, 'member');
+    await logActivity(db, 'admin', auth.user_id, `Created member "${body.name}" with contribution AED ${memberContribution}`, 'create_member', body.member_id, result.meta.last_row_id as number, 'member');
 
     return json({ success: true, data: { id: result.meta.last_row_id } }, 201);
   } catch (err: any) {

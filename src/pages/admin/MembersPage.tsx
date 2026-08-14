@@ -82,6 +82,7 @@ export default function MembersPage() {
       member_id: form.member_id,
       phone: '',
       email: '',
+      contribution_amount: form.monthly_amount ? parseFloat(form.monthly_amount) : undefined,
     });
 
     if (res.success) {
@@ -120,6 +121,7 @@ export default function MembersPage() {
       member_id: form.member_id,
       phone: '',
       email: '',
+      contribution_amount: form.monthly_amount ? parseFloat(form.monthly_amount) : undefined,
     });
 
     if (!res.success) {
@@ -458,23 +460,26 @@ export default function MembersPage() {
             <input className="input" value={form.member_id} onChange={(e) => setForm({ ...form, member_id: e.target.value })} required />
           </div>
 
-          {selectedMonthMember ? (
+          <div className="input-group">
+            <label className="input-label">Monthly Amount (AED)</label>
+            <input
+              className="input"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="500.00"
+              value={form.monthly_amount}
+              onChange={(e) => setForm({ ...form, monthly_amount: e.target.value })}
+            />
+            <p className="input-helper">Custom monthly contribution for this member</p>
+          </div>
+
+          {selectedMonthMember && (
             <div style={{ padding: '0.75rem', backgroundColor: 'var(--muted)', borderRadius: 'var(--radius)' }}>
-              <div className="text-sm"><strong>Monthly Amount:</strong> {formatCurrency(selectedMonthMember.contribution_amount)}</div>
               <div className="text-sm"><strong>Already Paid:</strong> {formatCurrency(selectedMonthMember.amount_paid)}</div>
-              <div className="text-sm"><strong>Pending:</strong> {formatCurrency(selectedMonthMember.contribution_amount - selectedMonthMember.amount_paid)}</div>
-            </div>
-          ) : (
-            <div className="input-group">
-              <label className="input-label">Monthly Amount (AED)</label>
-              <input
-                className="input"
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.monthly_amount}
-                onChange={(e) => setForm({ ...form, monthly_amount: e.target.value })}
-              />
+              <div className="text-sm">
+                <strong>Pending:</strong> {formatCurrency(Math.max(0, (parseFloat(form.monthly_amount) || selectedMonthMember.contribution_amount) - selectedMonthMember.amount_paid))}
+              </div>
             </div>
           )}
 
