@@ -51,7 +51,7 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     );
   }
 
-  // Close month
+  // Update status: close or reopen
   if (body.status === 'closed') {
     await db
       .prepare("UPDATE mess_months SET status = 'closed', closed_at = datetime('now') WHERE id = ?")
@@ -62,6 +62,35 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
       db, 'admin', auth.user_id,
       `Closed month: ${month.month_year}`,
       'close_month', '', Number(id), 'month'
+    );
+  } else if (body.status === 'active') {
+    const now = new Date();
+    const currentMonthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    if (month.month_year < currentMonthYear) {
+      return errorResponse('Cannot reopen a completed past month', 400);
+    }
+
+    // Close any other active months
+    await db.prepare("UPDATE mess_months SET status = 'closed', closed_at = datetime('now') WHERE status = 'active' AND id != ?").bind(id).run();
+
+    // Reopen this month
+    await db.prepare("UPDATE mess_months SET status = 'active', closed_at = NULL WHERE id = ?").bind(id).run();
+
+    // Ensure all active members are enrolled
+    const activeMembers = await db.prepare("SELECT id FROM members WHERE status = 'active'").all();
+    const contrib = body.contribution_amount ?? (month as any).contribution_amount ?? 0;
+    for (const member of activeMembers.results) {
+      await db
+        .prepare('INSERT OR IGNORE INTO month_members (month_id, member_id, contribution_amount) VALUES (?, ?, ?)')
+        .bind(id, (member as any).id, contrib)
+        .run();
+    }
+
+    await logActivity(
+      db, 'admin', auth.user_id,
+      `Reopened month: ${month.month_year}`,
+      'reopen_month', '', Number(id), 'month'
     );
   }
 

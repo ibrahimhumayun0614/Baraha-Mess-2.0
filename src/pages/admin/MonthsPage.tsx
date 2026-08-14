@@ -13,6 +13,7 @@ import {
   Edit,
   CheckCircle,
   Lock,
+  RotateCcw,
 } from 'lucide-react';
 import { api, formatCurrency, formatMonthYear } from '../../lib/api';
 import type { MessMonth, MonthSummary } from '../../types';
@@ -29,6 +30,7 @@ export default function MonthsPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
+  const [showReopenDialog, setShowReopenDialog] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
 
   const [createForm, setCreateForm] = useState({
@@ -118,6 +120,20 @@ export default function MonthsPage() {
     setFormLoading(false);
   };
 
+  const handleReopenMonth = async () => {
+    if (!selectedMonth) return;
+    setFormLoading(true);
+    const res = await api.put(`/months/${selectedMonth.id}`, { status: 'active' });
+    if (res.success) {
+      toast.success('Month cycle reactivated successfully');
+      setShowReopenDialog(false);
+      fetchMonths();
+    } else {
+      toast.error(res.error || 'Failed to reactivate month');
+    }
+    setFormLoading(false);
+  };
+
   // Generate current month value for the date input
   const getCurrentMonthInput = () => {
     const now = new Date();
@@ -202,7 +218,7 @@ export default function MonthsPage() {
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    {selectedMonth.status === 'active' && (
+                    {selectedMonth.status === 'active' ? (
                       <>
                         <button
                           className="btn btn-outline btn-sm"
@@ -220,7 +236,14 @@ export default function MonthsPage() {
                           <Lock size={14} /> Close Month
                         </button>
                       </>
-                    )}
+                    ) : selectedMonth.month_year >= getCurrentMonthInput() ? (
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => setShowReopenDialog(true)}
+                      >
+                        <RotateCcw size={14} /> Reopen Month
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -329,10 +352,12 @@ export default function MonthsPage() {
             <input
               className="input"
               type="month"
+              min={getCurrentMonthInput()}
               value={createForm.month_year}
               onChange={(e) => setCreateForm({ ...createForm, month_year: e.target.value })}
               required
             />
+            <p className="input-helper">You can start or reactivate the current ongoing month or upcoming cycles.</p>
           </div>
           <div className="input-group">
             <label className="input-label">Contribution per Person (AED) *</label>
@@ -390,6 +415,18 @@ export default function MonthsPage() {
         message={`Are you sure you want to close ${selectedMonth ? formatMonthYear(selectedMonth.month_year) : ''}?`}
         warning="Once closed, no new expenses or payments can be added to this month."
         confirmText="Close Month"
+        loading={formLoading}
+      />
+
+      {/* Reopen Month Confirmation */}
+      <ConfirmDialog
+        open={showReopenDialog}
+        onClose={() => setShowReopenDialog(false)}
+        onConfirm={handleReopenMonth}
+        title="Reopen Month Cycle"
+        message={`Are you sure you want to reactivate the cycle for ${selectedMonth ? formatMonthYear(selectedMonth.month_year) : ''}?`}
+        warning="This will make this month active and allow logging expenses and payments."
+        confirmText="Reopen Month"
         loading={formLoading}
       />
     </div>
