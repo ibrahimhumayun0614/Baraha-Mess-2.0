@@ -34,6 +34,7 @@ const ACTION_ICONS: Record<string, typeof LogIn> = {
   update_contribution: Edit,
   edit_member: Edit,
   deactivate_member: Trash2,
+  delete_member: Trash2,
 };
 
 const ACTION_COLORS: Record<string, string> = {

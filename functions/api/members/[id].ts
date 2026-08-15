@@ -95,7 +95,7 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
   }
 };
 
-// DELETE /api/members/:id — Deactivate
+// DELETE /api/members/:id — Permanently remove member and related totals
 export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params }) => {
   const db = env.DB;
   const auth = await authenticate(request, db);
@@ -105,9 +105,21 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
   const member = await db.prepare('SELECT name FROM members WHERE id = ?').bind(id).first<{ name: string }>();
   if (!member) return errorResponse('Member not found', 404);
 
-  await db.prepare("UPDATE members SET status = 'inactive', updated_at = datetime('now') WHERE id = ?").bind(id).run();
+  const monthMembers = await db
+    .prepare('SELECT id FROM month_members WHERE member_id = ?')
+    .bind(id)
+    .all<{ id: number }>();
 
-  await logActivity(db, 'admin', auth.user_id, `Deactivated member "${member.name}"`, 'deactivate_member', '', Number(id), 'member');
+  for (const mm of monthMembers.results || []) {
+    await db.prepare('DELETE FROM payments WHERE month_member_id = ?').bind(mm.id).run();
+  }
+
+  await db.prepare('DELETE FROM month_members WHERE member_id = ?').bind(id).run();
+  await db.prepare('DELETE FROM expenses WHERE created_by = ?').bind(id).run();
+  await db.prepare("DELETE FROM sessions WHERE user_type = 'member' AND user_id = ?").bind(id).run();
+  await db.prepare('DELETE FROM members WHERE id = ?').bind(id).run();
+
+  await logActivity(db, 'admin', auth.user_id, `Deleted member "${member.name}"`, 'delete_member', '', Number(id), 'member');
 
   return json({ success: true });
 };

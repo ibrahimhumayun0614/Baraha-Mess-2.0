@@ -159,10 +159,10 @@ export default function MembersPage() {
     const res = await api.delete(`/members/${selectedMember.id}`);
     if (res.success) {
       await fetchMembers();
-      toast.success('Member deactivated');
+      toast.success('Member deleted');
       setShowDeleteDialog(false);
     } else {
-      toast.error(res.error || 'Failed to deactivate member');
+      toast.error(res.error || 'Failed to delete member');
     }
     setFormLoading(false);
   };
@@ -373,7 +373,7 @@ export default function MembersPage() {
                               </button>
                               <div className="dropdown-separator" />
                               <button className="dropdown-item destructive" onClick={() => openDelete(member)}>
-                                Deactivate
+                                Delete
                               </button>
                             </div>
                           )}
@@ -505,10 +505,10 @@ export default function MembersPage() {
         open={showDeleteDialog}
         onClose={() => setShowDeleteDialog(false)}
         onConfirm={handleDelete}
-        title="Deactivate Member"
-        message={`Are you sure you want to deactivate "${selectedMember?.name}"?`}
-        warning="The member will be marked as inactive and won't be added to new monthly cycles."
-        confirmText="Deactivate"
+        title="Delete Member"
+        message={`Are you sure you want to delete "${selectedMember?.name}"?`}
+        warning="This removes the member from the dashboard. Their payments, expenses, and contribution will be removed from monthly totals."
+        confirmText="Delete"
         loading={formLoading}
         destructive
       />
