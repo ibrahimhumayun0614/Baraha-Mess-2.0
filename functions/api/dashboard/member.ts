@@ -48,7 +48,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     .bind(monthId).first<{ total: number }>();
 
   const paidMembers = await db
-    .prepare("SELECT COUNT(*) as total FROM month_members WHERE month_id = ? AND payment_status = 'paid'")
+    .prepare("SELECT COUNT(*) as total FROM month_members WHERE month_id = ? AND COALESCE(amount_paid, 0) > 0 AND amount_paid >= contribution_amount")
     .bind(monthId).first<{ total: number }>();
 
   // My expenses

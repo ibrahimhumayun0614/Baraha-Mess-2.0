@@ -38,10 +38,23 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
       .bind(body.contribution_amount, id)
       .run();
 
-    // Update all month_members contribution amounts too
+    // Update all month_members contribution amounts and payment status
     await db
       .prepare('UPDATE month_members SET contribution_amount = ? WHERE month_id = ?')
       .bind(body.contribution_amount, id)
+      .run();
+
+    await db
+      .prepare(`
+        UPDATE month_members
+        SET payment_status = CASE
+          WHEN COALESCE(amount_paid, 0) <= 0 THEN 'unpaid'
+          WHEN amount_paid >= contribution_amount THEN 'paid'
+          ELSE 'partial'
+        END
+        WHERE month_id = ?
+      `)
+      .bind(id)
       .run();
 
     await logActivity(

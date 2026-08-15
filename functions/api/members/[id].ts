@@ -1,7 +1,7 @@
 // ============================================
 // /api/members/[id] — GET, PUT, DELETE single member
 // ============================================
-import { json, errorResponse, authenticate, logActivity } from '../_shared';
+import { json, errorResponse, authenticate, logActivity, paymentStatusFromAmounts } from '../_shared';
 
 interface Env {
   DB: D1Database;
@@ -70,7 +70,7 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
 
         if (mm) {
           const paid = mm.amount_paid || 0;
-          const newStatus = paid >= newContribution ? 'paid' : (paid > 0 ? 'partial' : 'unpaid');
+          const newStatus = paymentStatusFromAmounts(paid, newContribution);
           await db
             .prepare("UPDATE month_members SET contribution_amount = ?, payment_status = ? WHERE id = ?")
             .bind(newContribution, newStatus, mm.id)

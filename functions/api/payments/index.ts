@@ -1,7 +1,7 @@
 // ============================================
 // /api/payments — POST record payment
 // ============================================
-import { json, errorResponse, authenticate, logActivity } from '../_shared';
+import { json, errorResponse, authenticate, logActivity, paymentStatusFromAmounts } from '../_shared';
 
 interface Env {
   DB: D1Database;
@@ -45,12 +45,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   // Update amount_paid and payment_status
   const newPaid = mm.amount_paid + body.amount;
-  let status = 'unpaid';
-  if (newPaid >= mm.contribution_amount) {
-    status = 'paid';
-  } else if (newPaid > 0) {
-    status = 'partial';
-  }
+  const status = paymentStatusFromAmounts(newPaid, mm.contribution_amount);
 
   await db
     .prepare('UPDATE month_members SET amount_paid = ?, payment_status = ? WHERE id = ?')

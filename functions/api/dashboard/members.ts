@@ -1,7 +1,7 @@
 // ============================================
 // /api/dashboard/members — GET month members with payment info
 // ============================================
-import { json, errorResponse, authenticate, getActiveMonth } from '../_shared';
+import { json, errorResponse, authenticate, getActiveMonth, paymentStatusFromAmounts } from '../_shared';
 
 interface Env {
   DB: D1Database;
@@ -28,5 +28,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     .bind(activeMonth.id)
     .all();
 
-  return json({ success: true, data: members.results });
+  const data = (members.results || []).map((row: any) => ({
+    ...row,
+    payment_status: paymentStatusFromAmounts(Number(row.amount_paid) || 0, Number(row.contribution_amount) || 0),
+  }));
+
+  return json({ success: true, data });
 };

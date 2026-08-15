@@ -100,6 +100,13 @@ export function getSearchParams(request: Request): URLSearchParams {
   return url.searchParams;
 }
 
+/** Paid amount 0 is always unpaid, even if contribution is 0. */
+export function paymentStatusFromAmounts(paid: number, contribution: number): 'paid' | 'partial' | 'unpaid' {
+  if (!paid || paid <= 0) return 'unpaid';
+  if (paid >= contribution) return 'paid';
+  return 'partial';
+}
+
 /** Shared SELECT for expense rows: Paid By, Added By, Period */
 export const EXPENSE_SELECT = `
   SELECT e.*,
@@ -306,5 +313,21 @@ export async function ensureAuthTables(db: D1Database): Promise<void> {
     await db.prepare('ALTER TABLE expenses ADD COLUMN added_by_id INTEGER').run();
   } catch {
     // Column already exists
+  }
+
+  try {
+    await db.prepare(`
+      UPDATE month_members
+      SET payment_status = CASE
+        WHEN COALESCE(amount_paid, 0) <= 0 THEN 'unpaid'
+        WHEN amount_paid >= contribution_amount THEN 'paid'
+        ELSE 'partial'
+      END
+      WHERE (COALESCE(amount_paid, 0) <= 0 AND payment_status != 'unpaid')
+         OR (amount_paid > 0 AND amount_paid >= contribution_amount AND payment_status != 'paid')
+         OR (amount_paid > 0 AND amount_paid < contribution_amount AND payment_status != 'partial')
+    `).run();
+  } catch {
+    // Table may not exist yet
   }
 }
