@@ -83,30 +83,63 @@ export const api = {
     request<T>(endpoint, { method: 'DELETE' }),
 };
 
-// ---- Utility Functions ----
+// ---- Utility Functions & Cached Formatters for Fast Rendering ----
+
+const currencyFormatter = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+});
+
+const dateTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+const monthYearFormatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'long',
+});
+
+const monthNames = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
 
 export function formatCurrency(amount: number): string {
-  return `AED ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (typeof amount !== 'number' || isNaN(amount)) return 'AED 0.00';
+  return `AED ${currencyFormatter.format(amount)}`;
 }
 
 export function formatDate(dateStr: string): string {
+  if (!dateStr) return '—';
+  // Parse YYYY-MM-DD safely without timezone shift or slow Date constructor
+  const parts = dateStr.split('T')[0].split('-');
+  if (parts.length === 3) {
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+      const date = new Date(year, month, day);
+      return dateFormatter.format(date);
+    }
+  }
   const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+  return isNaN(date.getTime()) ? dateStr : dateFormatter.format(date);
 }
 
 export function formatDateTime(dateStr: string): string {
+  if (!dateStr) return '—';
   const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return isNaN(date.getTime()) ? dateStr : dateTimeFormatter.format(date);
 }
 
 export function formatNote(note?: string | null): string {
@@ -136,9 +169,18 @@ export function formatPeriod(expense: { month_status?: string; month_year?: stri
 }
 
 export function formatMonthYear(monthYear: string): string {
+  if (!monthYear) return '—';
+  const parts = monthYear.split('-');
+  if (parts.length === 2) {
+    const year = parseInt(parts[0], 10);
+    const monthIndex = parseInt(parts[1], 10) - 1;
+    if (!isNaN(year) && monthIndex >= 0 && monthIndex < 12) {
+      return `${monthNames[monthIndex]} ${year}`;
+    }
+  }
   const [year, month] = monthYear.split('-');
-  const date = new Date(parseInt(year), parseInt(month) - 1);
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+  const date = new Date(parseInt(year, 10), parseInt(month, 10) - 1);
+  return isNaN(date.getTime()) ? monthYear : monthYearFormatter.format(date);
 }
 
 export function getInitials(name: string): string {

@@ -40,7 +40,7 @@ export default function Select({
   useEffect(() => {
     if (!open) return;
 
-    const onPointerDown = (e: MouseEvent) => {
+    const onPointerDown = (e: PointerEvent | MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) {
         setOpen(false);
       }
@@ -49,10 +49,10 @@ export default function Select({
       if (e.key === 'Escape') setOpen(false);
     };
 
-    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('pointerdown', onPointerDown as EventListener, { passive: true });
     document.addEventListener('keydown', onKeyDown);
     return () => {
-      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('pointerdown', onPointerDown as EventListener);
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [open]);
