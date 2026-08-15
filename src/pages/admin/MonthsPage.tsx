@@ -162,7 +162,7 @@ export default function MonthsPage() {
         </div>
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: '280px 1fr', gap: '1rem' }}>
+      <div className="months-layout">
         {/* Months List */}
         <div className="flex flex-col gap-2 animate-fade-in">
           {loading ? (
