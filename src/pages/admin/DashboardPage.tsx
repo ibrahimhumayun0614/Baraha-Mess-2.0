@@ -16,9 +16,10 @@ import {
   Calendar,
   Receipt,
 } from 'lucide-react';
-import { api, formatCurrency, formatDate, formatMonthYear, formatNote, formatPaidBy, formatAddedBy } from '../../lib/api';
-import type { DashboardStats, Expense, MonthMember } from '../../types';
+import { api, formatCurrency, formatMonthYear } from '../../lib/api';
+import type { DashboardStats, MonthMember } from '../../types';
 import AddExpenseDialog from '../../components/expenses/AddExpenseDialog';
+import ExpenseHistoryTable from '../../components/expenses/ExpenseHistoryTable';
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
@@ -277,34 +278,10 @@ export default function AdminDashboardPage() {
                   View All <ArrowRight size={14} />
                 </button>
               </div>
-              <div style={{ padding: '0.5rem 1rem' }}>
-                {(!stats!.recent_expenses || stats!.recent_expenses.length === 0) ? (
-                  <div className="empty-state" style={{ padding: '2rem' }}>
-                    <p className="text-sm text-muted">No expenses recorded yet</p>
-                  </div>
-                ) : (
-                  stats!.recent_expenses.slice(0, 8).map((expense: Expense) => (
-                    <div
-                      key={expense.id}
-                      className="flex items-center justify-between"
-                      style={{ padding: '0.625rem 0', borderBottom: '1px solid var(--border)' }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="avatar avatar-sm" style={{ backgroundColor: 'var(--muted)', color: 'var(--muted-foreground)' }}>
-                          {expense.creator_name?.charAt(0) || '?'}
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium">{formatNote(expense.description)}</div>
-                          <div className="text-xs text-muted">
-                            Paid by {formatPaidBy(expense)} · Added by {formatAddedBy(expense)} · {formatDate(expense.date)}
-                          </div>
-                        </div>
-                      </div>
-                      <span className="amount">{formatCurrency(expense.amount)}</span>
-                    </div>
-                  ))
-                )}
-              </div>
+              <ExpenseHistoryTable
+                expenses={stats!.recent_expenses?.slice(0, 8) || []}
+                emptyMessage="No expenses recorded yet"
+              />
             </div>
           </div>
         </>

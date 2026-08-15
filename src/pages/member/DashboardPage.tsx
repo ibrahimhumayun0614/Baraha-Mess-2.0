@@ -4,10 +4,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Wallet, ArrowRight } from 'lucide-react';
-import { api, formatCurrency, formatDate, formatMonthYear, formatNote, formatPaidBy, formatAddedBy } from '../../lib/api';
-import type { MemberDashboardStats, Expense } from '../../types';
+import { api, formatCurrency, formatMonthYear } from '../../lib/api';
+import type { MemberDashboardStats } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import AddExpenseDialog from '../../components/expenses/AddExpenseDialog';
+import ExpenseHistoryTable from '../../components/expenses/ExpenseHistoryTable';
 
 export default function MemberDashboardPage() {
   const { user } = useAuth();
@@ -124,36 +125,20 @@ export default function MemberDashboardPage() {
                 View All <ArrowRight size={14} />
               </button>
             </div>
-            <div style={{ padding: '0.5rem 1rem' }}>
-              {(!stats.recent_expenses || stats.recent_expenses.length === 0) ? (
-                <div className="empty-state" style={{ padding: '2rem' }}>
-                  <p className="text-sm text-muted">You haven't added any expenses yet</p>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    style={{ marginTop: '0.75rem' }}
-                    onClick={() => setShowAddExpense(true)}
-                  >
-                    Add Your First Expense
-                  </button>
-                </div>
-              ) : (
-                stats.recent_expenses.slice(0, 10).map((expense: Expense) => (
-                  <div
-                    key={expense.id}
-                    className="flex items-center justify-between"
-                    style={{ padding: '0.625rem 0.5rem', borderBottom: '1px solid var(--border)' }}
-                  >
-                    <div>
-                      <div className="text-sm font-medium">{formatNote(expense.description)}</div>
-                      <div className="text-xs text-muted">
-                        Paid by {formatPaidBy(expense)} · Added by {formatAddedBy(expense)} · {formatDate(expense.date)}
-                      </div>
-                    </div>
-                    <span className="amount">{formatCurrency(expense.amount)}</span>
-                  </div>
-                ))
-              )}
-            </div>
+            {(!stats.recent_expenses || stats.recent_expenses.length === 0) ? (
+              <div className="empty-state" style={{ padding: '2rem' }}>
+                <p className="text-sm text-muted">You haven't added any expenses yet</p>
+                <button
+                  className="btn btn-primary btn-sm"
+                  style={{ marginTop: '0.75rem' }}
+                  onClick={() => setShowAddExpense(true)}
+                >
+                  Add Your First Expense
+                </button>
+              </div>
+            ) : (
+              <ExpenseHistoryTable expenses={stats.recent_expenses.slice(0, 10)} />
+            )}
           </div>
         </>
       )}

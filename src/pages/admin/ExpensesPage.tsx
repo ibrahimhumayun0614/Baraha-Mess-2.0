@@ -34,7 +34,7 @@ export default function ExpensesPage() {
   // Filters
   const [search, setSearch] = useState('');
   const [memberFilter, setMemberFilter] = useState('');
-  const [monthFilter, setMonthFilter] = useState('');
+  const [monthFilter, setMonthFilter] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
@@ -113,8 +113,6 @@ export default function ExpensesPage() {
     const res = await api.get<MessMonth[]>('/months');
     if (res.success && res.data && res.data.length > 0) {
       setMonths(res.data);
-      const active = res.data.find((m) => m.status === 'active');
-      if (active && !monthFilter) setMonthFilter(String(active.id));
     } else {
       setMonths([]);
     }
@@ -250,16 +248,15 @@ export default function ExpensesPage() {
             onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
             title="Date to"
           />
-          {(search || memberFilter || dateFrom || dateTo || (monthFilter && monthFilter !== String(months.find((m) => m.status === 'active')?.id || ''))) && (
+          {(search || memberFilter || dateFrom || dateTo || monthFilter !== 'all') && (
             <button
               className="btn btn-ghost btn-sm"
               onClick={() => {
-                const active = months.find((m) => m.status === 'active');
                 setSearch('');
                 setMemberFilter('');
                 setDateFrom('');
                 setDateTo('');
-                setMonthFilter(active ? String(active.id) : 'all');
+                setMonthFilter('all');
                 setPage(1);
               }}
             >

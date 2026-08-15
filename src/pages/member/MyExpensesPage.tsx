@@ -44,6 +44,7 @@ export default function MyExpensesPage() {
       sort_by: sortBy,
       sort_order: sortOrder,
       mine: true,
+      month_id: 'all',
     });
     const res = await api.get<Expense[]>(`/expenses${query}`);
     if (res.success && res.data) {
