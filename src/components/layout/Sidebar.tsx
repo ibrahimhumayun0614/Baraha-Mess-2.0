@@ -1,6 +1,7 @@
 // ============================================
 // Sidebar Navigation Component
 // ============================================
+import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -11,8 +12,10 @@ import {
   LogOut,
   History,
   Home,
+  KeyRound,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import ChangePasswordModal from '../auth/ChangePasswordModal';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -22,6 +25,7 @@ interface SidebarProps {
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -80,7 +84,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="sidebar-link" style={{ marginBottom: '0.5rem', pointerEvents: 'none' }}>
+          <div className="sidebar-link" style={{ marginBottom: '0.25rem', pointerEvents: 'none' }}>
             <div className="avatar avatar-sm">
               {user?.name?.charAt(0).toUpperCase() || 'U'}
             </div>
@@ -93,12 +97,32 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
               </div>
             </div>
           </div>
+          {isAdmin && (
+            <button
+              className="sidebar-link"
+              onClick={() => {
+                setShowPasswordModal(true);
+                onClose();
+              }}
+            >
+              <KeyRound className="sidebar-link-icon" size={18} />
+              <span className="sidebar-link-text">Change Password</span>
+            </button>
+          )}
           <button className="sidebar-link" onClick={handleLogout}>
             <LogOut className="sidebar-link-icon" size={18} />
             <span className="sidebar-link-text">Logout</span>
           </button>
         </div>
       </aside>
+
+      {isAdmin && (
+        <ChangePasswordModal
+          isOpen={showPasswordModal}
+          onClose={() => setShowPasswordModal(false)}
+        />
+      )}
     </>
   );
 }
+

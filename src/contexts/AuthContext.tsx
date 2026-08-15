@@ -63,6 +63,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  // Auto-logout after 15 seconds of inactivity
+  useEffect(() => {
+    if (!user) return;
+
+    const INACTIVITY_TIMEOUT = 15 * 1000; // 15 seconds
+    let inactivityTimer: ReturnType<typeof setTimeout>;
+
+    const handleUserActivity = () => {
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        logout();
+      }, INACTIVITY_TIMEOUT);
+    };
+
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart', 'pointerdown'];
+
+    events.forEach((eventName) => {
+      window.addEventListener(eventName, handleUserActivity, { passive: true });
+    });
+
+    // Initialize timer on login
+    handleUserActivity();
+
+    return () => {
+      clearTimeout(inactivityTimer);
+      events.forEach((eventName) => {
+        window.removeEventListener(eventName, handleUserActivity);
+      });
+    };
+  }, [user, logout]);
+
+
   return (
     <AuthContext.Provider
       value={{

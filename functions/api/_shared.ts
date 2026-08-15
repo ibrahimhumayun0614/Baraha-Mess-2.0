@@ -44,6 +44,7 @@ export async function authenticate(request: Request, db: D1Database): Promise<{
   user_id: number;
   user_name: string;
 } | null> {
+  await ensureAuthTables(db);
   const token = getToken(request);
   if (!token) return null;
 
@@ -118,3 +119,178 @@ export const EXPENSE_SELECT = `
     ON COALESCE(e.added_by_type, 'member') = 'member'
     AND COALESCE(e.added_by_id, e.created_by) = adder.id
 `;
+
+// Password hashing helper using Web Crypto API (Salted SHA-256)
+export async function hashPassword(password: string, saltHex?: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const saltBytes = saltHex
+    ? hexToBytes(saltHex)
+    : crypto.getRandomValues(new Uint8Array(16));
+
+  const saltHexStr = saltHex || bytesToHex(saltBytes);
+  const data = encoder.encode(`${saltHexStr}:${password}`);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashHex = bytesToHex(new Uint8Array(hashBuffer));
+
+  return `${saltHexStr}:${hashHex}`;
+}
+
+export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+  if (!storedHash || typeof storedHash !== 'string') return false;
+  const parts = storedHash.split(':');
+  if (parts.length !== 2) return false;
+  const [saltHex] = parts;
+  const computedHash = await hashPassword(password, saltHex);
+  return computedHash === storedHash;
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+// Ensure essential tables exist automatically if schema hasn't been executed
+export async function ensureAuthTables(db: D1Database): Promise<void> {
+  try {
+    await db.batch([
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS admins (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS members (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          member_id TEXT NOT NULL UNIQUE,
+          phone TEXT DEFAULT '',
+          email TEXT DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'inactive')),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS mess_months (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          month_year TEXT NOT NULL UNIQUE,
+          contribution_amount REAL NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'closed')),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          closed_at TEXT
+        )
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS month_members (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          month_id INTEGER NOT NULL,
+          member_id INTEGER NOT NULL,
+          contribution_amount REAL NOT NULL DEFAULT 0,
+          payment_status TEXT NOT NULL DEFAULT 'unpaid' CHECK(payment_status IN ('paid', 'unpaid', 'partial')),
+          amount_paid REAL NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (month_id) REFERENCES mess_months(id) ON DELETE CASCADE,
+          FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE,
+          UNIQUE(month_id, member_id)
+        )
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS payments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          month_member_id INTEGER NOT NULL,
+          amount REAL NOT NULL,
+          payment_date TEXT NOT NULL DEFAULT (date('now')),
+          notes TEXT DEFAULT '',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (month_member_id) REFERENCES month_members(id) ON DELETE CASCADE
+        )
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS expense_categories (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          icon TEXT DEFAULT 'tag'
+        )
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS expenses (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          month_id INTEGER NOT NULL,
+          created_by INTEGER NOT NULL,
+          amount REAL NOT NULL,
+          date TEXT NOT NULL DEFAULT (date('now')),
+          description TEXT DEFAULT '',
+          category_id INTEGER,
+          added_by_type TEXT NOT NULL DEFAULT 'member' CHECK(added_by_type IN ('admin', 'member')),
+          added_by_id INTEGER,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (month_id) REFERENCES mess_months(id) ON DELETE CASCADE,
+          FOREIGN KEY (created_by) REFERENCES members(id) ON DELETE CASCADE,
+          FOREIGN KEY (category_id) REFERENCES expense_categories(id) ON DELETE SET NULL
+        )
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS activity_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          actor_type TEXT NOT NULL CHECK(actor_type IN ('admin', 'member')),
+          actor_id INTEGER NOT NULL,
+          action TEXT NOT NULL,
+          action_type TEXT NOT NULL,
+          details TEXT DEFAULT '',
+          reference_id INTEGER,
+          reference_type TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `),
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          token TEXT NOT NULL UNIQUE,
+          user_type TEXT NOT NULL CHECK(user_type IN ('admin', 'member')),
+          user_id INTEGER NOT NULL,
+          expires_at TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Groceries', 'shopping-cart')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Vegetables', 'carrot')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Meat', 'beef')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Rice', 'wheat')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Gas', 'flame')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Utilities', 'zap')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Fruits', 'apple')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Dairy', 'milk')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Spices', 'pepper')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Cleaning', 'sparkles')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Water', 'droplets')"),
+      db.prepare("INSERT OR IGNORE INTO expense_categories (name, icon) VALUES ('Other', 'tag')"),
+    ]);
+  } catch (e) {
+    // Ignore error if tables already exist
+  }
+
+  // Existing DBs created before Paid By / Added By tracking
+  try {
+    await db.prepare("ALTER TABLE expenses ADD COLUMN added_by_type TEXT DEFAULT 'member'").run();
+  } catch {
+    // Column already exists
+  }
+  try {
+    await db.prepare('ALTER TABLE expenses ADD COLUMN added_by_id INTEGER').run();
+  } catch {
+    // Column already exists
+  }
+}

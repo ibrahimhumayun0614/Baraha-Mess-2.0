@@ -27,7 +27,15 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
   if (!auth || auth.user_type !== 'admin') return errorResponse('Admin access required', 403);
 
   const id = params.id;
-  const body = await request.json() as { name?: string; member_id?: string; phone?: string; email?: string; status?: string };
+  const body = await request.json() as {
+    name?: string;
+    member_id?: string;
+    phone?: string;
+    email?: string;
+    status?: string;
+    contribution_amount?: number;
+    monthly_amount?: number;
+  };
 
   const member = await db.prepare('SELECT * FROM members WHERE id = ?').bind(id).first();
   if (!member) return errorResponse('Member not found', 404);
@@ -36,15 +44,47 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     await db
       .prepare("UPDATE members SET name = ?, member_id = ?, phone = ?, email = ?, updated_at = datetime('now') WHERE id = ?")
       .bind(
-        body.name || member.name,
-        body.member_id || member.member_id,
-        body.phone !== undefined ? body.phone : member.phone,
-        body.email !== undefined ? body.email : member.email,
+        body.name || (member as any).name,
+        body.member_id || (member as any).member_id,
+        body.phone !== undefined ? body.phone : (member as any).phone,
+        body.email !== undefined ? body.email : (member as any).email,
         id
       )
       .run();
 
-    await logActivity(db, 'admin', auth.user_id, `Updated member "${body.name || member.name}"`, 'edit_member', '', Number(id), 'member');
+    // Update contribution amount in active month if provided
+    const newContribution = body.contribution_amount !== undefined
+      ? Number(body.contribution_amount)
+      : (body.monthly_amount !== undefined ? Number(body.monthly_amount) : undefined);
+
+    if (newContribution !== undefined && !isNaN(newContribution)) {
+      const activeMonth = await db
+        .prepare("SELECT id FROM mess_months WHERE status = 'active' ORDER BY id DESC LIMIT 1")
+        .first<{ id: number }>();
+
+      if (activeMonth) {
+        const mm = await db
+          .prepare("SELECT id, amount_paid FROM month_members WHERE month_id = ? AND member_id = ?")
+          .bind(activeMonth.id, id)
+          .first<{ id: number; amount_paid: number }>();
+
+        if (mm) {
+          const paid = mm.amount_paid || 0;
+          const newStatus = paid >= newContribution ? 'paid' : (paid > 0 ? 'partial' : 'unpaid');
+          await db
+            .prepare("UPDATE month_members SET contribution_amount = ?, payment_status = ? WHERE id = ?")
+            .bind(newContribution, newStatus, mm.id)
+            .run();
+        } else {
+          await db
+            .prepare("INSERT INTO month_members (month_id, member_id, contribution_amount) VALUES (?, ?, ?)")
+            .bind(activeMonth.id, id, newContribution)
+            .run();
+        }
+      }
+    }
+
+    await logActivity(db, 'admin', auth.user_id, `Updated member "${body.name || (member as any).name}"`, 'edit_member', '', Number(id), 'member');
 
     return json({ success: true });
   } catch (err: any) {

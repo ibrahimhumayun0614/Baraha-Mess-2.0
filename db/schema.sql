@@ -139,8 +139,8 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 
 -- ============================================
 -- Seed Data: Default Admin
--- Password is NOT stored here — set ADMIN_PASSWORD
--- as a Cloudflare Pages environment variable / secret
+-- Initial placeholder. Seeded/hashed automatically on first login.
+-- Default initial password: admin123 (or env.ADMIN_PASSWORD if set)
 -- ============================================
 INSERT OR IGNORE INTO admins (username, password_hash) 
 VALUES ('admin', 'env');
