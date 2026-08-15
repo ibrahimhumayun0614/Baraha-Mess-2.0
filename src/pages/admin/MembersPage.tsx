@@ -74,6 +74,21 @@ export default function MembersPage() {
     return String(fromMonth ?? 500);
   };
 
+  const nextMemberId = () => {
+    let max = 0;
+    let width = 3;
+    for (const member of members) {
+      const digits = (member.member_id || '').replace(/\D/g, '');
+      if (!digits) continue;
+      const n = parseInt(digits, 10);
+      if (!Number.isNaN(n) && n > max) {
+        max = n;
+        width = Math.max(width, digits.length);
+      }
+    }
+    return String(max + 1).padStart(width, '0');
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormLoading(true);
@@ -224,9 +239,9 @@ export default function MembersPage() {
             onClick={() => {
               setForm({
                 name: '',
-                member_id: '',
+                member_id: nextMemberId(),
                 monthly_amount: defaultMonthlyAmount(),
-                amount_paid: '',
+                amount_paid: '0',
               });
               setShowCreateDialog(true);
             }}
@@ -408,7 +423,14 @@ export default function MembersPage() {
           </div>
           <div className="input-group">
             <label className="input-label">Member ID *</label>
-            <input className="input" placeholder="e.g. MEM-001" value={form.member_id} onChange={(e) => setForm({ ...form, member_id: e.target.value })} required />
+            <input
+              className="input"
+              placeholder="001"
+              value={form.member_id}
+              onChange={(e) => setForm({ ...form, member_id: e.target.value })}
+              required
+            />
+            <p className="input-helper">Filled automatically with the next available number</p>
           </div>
           <div className="input-group">
             <label className="input-label">Monthly Amount (AED)</label>
