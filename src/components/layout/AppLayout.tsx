@@ -5,9 +5,11 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import Sidebar from './Sidebar';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user } = useAuth();
 
   return (
     <div className="app-shell">
@@ -19,12 +21,14 @@ export default function AppLayout() {
             <button
               className="mobile-menu-btn"
               onClick={() => setSidebarOpen(true)}
+              aria-label="Open menu"
             >
               <Menu size={18} />
             </button>
+            <span className="mobile-header-title">Baraha Mess</span>
           </div>
           <div className="top-header-right">
-            {/* Future: notifications, quick actions */}
+            <span className="mobile-header-user">{user?.name}</span>
           </div>
         </header>
 

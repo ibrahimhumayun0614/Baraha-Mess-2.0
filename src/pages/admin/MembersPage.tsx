@@ -278,7 +278,7 @@ export default function MembersPage() {
         </div>
 
         <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-          <table className="table">
+          <table className="table table-mobile-cards">
             <thead>
               <tr>
                 <th>Member</th>
@@ -313,18 +313,18 @@ export default function MembersPage() {
                   const pending = mm ? mm.contribution_amount - mm.amount_paid : 0;
                   return (
                     <tr key={member.id}>
-                      <td>
+                      <td data-label="Member">
                         <div className="font-medium">{member.name}</div>
                       </td>
-                      <td>
+                      <td data-label="Status">
                         <span className={`badge ${member.status === 'active' ? 'badge-success' : 'badge-secondary'}`}>
                           {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
                         </span>
                       </td>
-                      <td className="amount">{mm ? formatCurrency(mm.contribution_amount) : '—'}</td>
-                      <td className="amount">{mm ? formatCurrency(mm.amount_paid) : '—'}</td>
-                      <td className="amount">{mm ? formatCurrency(pending) : '—'}</td>
-                      <td>
+                      <td className="amount" data-label="Monthly">{mm ? formatCurrency(mm.contribution_amount) : '—'}</td>
+                      <td className="amount" data-label="Paid">{mm ? formatCurrency(mm.amount_paid) : '—'}</td>
+                      <td className="amount" data-label="Pending">{mm ? formatCurrency(pending) : '—'}</td>
+                      <td data-label="Payment">
                         {mm ? (
                           <span className={`badge ${
                             mm.payment_status === 'paid' ? 'badge-success' :
@@ -337,7 +337,7 @@ export default function MembersPage() {
                           <span className="text-muted text-sm">—</span>
                         )}
                       </td>
-                      <td>
+                      <td className="table-actions-cell" data-label="Actions">
                         <div className="dropdown">
                           <button
                             className="btn btn-ghost btn-icon btn-sm"

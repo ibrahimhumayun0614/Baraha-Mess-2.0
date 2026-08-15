@@ -223,7 +223,7 @@ export default function AdminDashboardPage() {
                 </button>
               </div>
               <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-                <table className="table">
+                <table className="table table-mobile-cards">
                   <thead>
                     <tr>
                       <th>Member</th>
@@ -240,7 +240,7 @@ export default function AdminDashboardPage() {
                     ) : (
                       members.slice(0, 8).map((mm) => (
                         <tr key={mm.id}>
-                          <td>
+                          <td data-label="Member">
                             <div className="flex items-center gap-2">
                               <div className="avatar avatar-sm">
                                 {mm.member_name?.charAt(0) || '?'}
@@ -248,9 +248,9 @@ export default function AdminDashboardPage() {
                               <span className="font-medium">{mm.member_name}</span>
                             </div>
                           </td>
-                          <td className="amount">{formatCurrency(mm.contribution_amount)}</td>
-                          <td className="amount">{formatCurrency(mm.amount_paid)}</td>
-                          <td>
+                          <td className="amount" data-label="Amount">{formatCurrency(mm.contribution_amount)}</td>
+                          <td className="amount" data-label="Paid">{formatCurrency(mm.amount_paid)}</td>
+                          <td data-label="Status">
                             <span className={`badge ${
                               mm.payment_status === 'paid' ? 'badge-success' :
                               mm.payment_status === 'partial' ? 'badge-warning' :

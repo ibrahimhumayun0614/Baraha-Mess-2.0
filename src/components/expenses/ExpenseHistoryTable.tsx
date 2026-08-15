@@ -23,7 +23,7 @@ export default function ExpenseHistoryTable({
 
   return (
     <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-      <table className="table">
+      <table className="table table-mobile-cards">
         <thead>
           <tr>
             <th>Paid By</th>
@@ -37,18 +37,18 @@ export default function ExpenseHistoryTable({
         <tbody>
           {expenses.map((expense) => (
             <tr key={expense.id}>
-              <td className="font-medium">{formatPaidBy(expense)}</td>
-              <td>{formatAddedBy(expense)}</td>
-              <td>{formatDate(expense.date)}</td>
-              <td>
+              <td className="font-medium" data-label="Paid By">{formatPaidBy(expense)}</td>
+              <td data-label="Added By">{formatAddedBy(expense)}</td>
+              <td data-label="Date">{formatDate(expense.date)}</td>
+              <td data-label="Period">
                 <span className={`badge ${expense.month_status === 'active' ? 'badge-success' : 'badge-secondary'}`}>
                   {formatPeriod(expense)}
                 </span>
               </td>
-              <td>
+              <td data-label="Note">
                 <span className="text-sm">{formatNote(expense.description)}</span>
               </td>
-              <td className="amount">{formatCurrency(expense.amount)}</td>
+              <td className="amount" data-label="Amount">{formatCurrency(expense.amount)}</td>
             </tr>
           ))}
         </tbody>

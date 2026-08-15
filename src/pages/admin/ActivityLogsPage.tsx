@@ -143,7 +143,7 @@ export default function ActivityLogsPage() {
         </div>
 
         {/* Activity List */}
-        <div style={{ padding: '0.5rem 1.5rem' }}>
+        <div className="activity-list">
           {loading ? (
             Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="activity-item">

@@ -91,7 +91,7 @@ export default function LoginPage() {
           </div>
 
           {/* Tabs */}
-          <div className="tabs" style={{ margin: '0 2rem' }}>
+          <div className="tabs login-tabs">
             <button
               className={`tab ${activeTab === 'admin' ? 'active' : ''}`}
               onClick={() => { setActiveTab('admin'); setError(''); }}
