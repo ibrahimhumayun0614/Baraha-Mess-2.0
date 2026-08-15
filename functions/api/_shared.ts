@@ -120,6 +120,20 @@ export const EXPENSE_SELECT = `
     AND COALESCE(e.added_by_id, e.created_by) = adder.id
 `;
 
+/** Fallback when added_by columns are not on the database yet */
+export const EXPENSE_SELECT_FALLBACK = `
+  SELECT e.*,
+    c.name as category_name, c.icon as category_icon,
+    m.name as creator_name,
+    m.name as added_by_name,
+    mm.month_year,
+    mm.status as month_status
+  FROM expenses e
+  LEFT JOIN expense_categories c ON e.category_id = c.id
+  LEFT JOIN members m ON e.created_by = m.id
+  LEFT JOIN mess_months mm ON e.month_id = mm.id
+`;
+
 // Password hashing helper using Web Crypto API (Salted SHA-256)
 export async function hashPassword(password: string, saltHex?: string): Promise<string> {
   const encoder = new TextEncoder();

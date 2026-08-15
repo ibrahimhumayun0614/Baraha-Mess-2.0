@@ -1,7 +1,7 @@
 // ============================================
 // /api/expenses — GET all (with filters), POST create
 // ============================================
-import { json, errorResponse, authenticate, logActivity, getActiveMonth, getSearchParams, EXPENSE_SELECT } from '../_shared';
+import { json, errorResponse, authenticate, logActivity, getActiveMonth, getSearchParams, EXPENSE_SELECT, EXPENSE_SELECT_FALLBACK } from '../_shared';
 
 interface Env {
   DB: D1Database;
@@ -91,14 +91,20 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   `;
   const countResult = await db.prepare(countQuery).bind(...binds).first<{ total: number }>();
 
-  // Fetch data
-  const dataQuery = `
-    ${EXPENSE_SELECT}
-    ${where}
-    ORDER BY ${sortColumn} ${order}
-    LIMIT ? OFFSET ?
-  `;
-  const results = await db.prepare(dataQuery).bind(...binds, limit, offset).all();
+  const fetchRows = async (selectSql: string) =>
+    db.prepare(`
+      ${selectSql}
+      ${where}
+      ORDER BY ${sortColumn} ${order}
+      LIMIT ? OFFSET ?
+    `).bind(...binds, limit, offset).all();
+
+  let results;
+  try {
+    results = await fetchRows(EXPENSE_SELECT);
+  } catch {
+    results = await fetchRows(EXPENSE_SELECT_FALLBACK);
+  }
 
   return json({
     success: true,
@@ -150,21 +156,31 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   try {
-    const result = await db
-      .prepare(
-        'INSERT INTO expenses (month_id, created_by, amount, date, description, category_id, added_by_type, added_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-      )
-      .bind(
-        activeMonth.id,
-        createdBy,
-        body.amount,
-        body.date,
-        body.description || '',
-        body.category_id,
-        auth.user_type,
-        auth.user_id
-      )
-      .run();
+    let result;
+    try {
+      result = await db
+        .prepare(
+          'INSERT INTO expenses (month_id, created_by, amount, date, description, category_id, added_by_type, added_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        )
+        .bind(
+          activeMonth.id,
+          createdBy,
+          body.amount,
+          body.date,
+          body.description || '',
+          body.category_id,
+          auth.user_type,
+          auth.user_id
+        )
+        .run();
+    } catch {
+      result = await db
+        .prepare(
+          'INSERT INTO expenses (month_id, created_by, amount, date, description, category_id) VALUES (?, ?, ?, ?, ?, ?)'
+        )
+        .bind(activeMonth.id, createdBy, body.amount, body.date, body.description || '', body.category_id)
+        .run();
+    }
 
     const forMember =
       auth.user_type === 'admin' && body.created_by

@@ -1,7 +1,7 @@
 // ============================================
 // /api/dashboard/member — GET member-specific dashboard stats
 // ============================================
-import { json, errorResponse, authenticate, getActiveMonth, EXPENSE_SELECT } from '../_shared';
+import { json, errorResponse, authenticate, getActiveMonth, EXPENSE_SELECT, EXPENSE_SELECT_FALLBACK } from '../_shared';
 
 interface Env {
   DB: D1Database;
@@ -66,14 +66,26 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const dailyAverage = currentDay > 0 ? totalSpent / currentDay : 0;
 
   // My recent expenses
-  const recentExpenses = await db
-    .prepare(`
-      ${EXPENSE_SELECT}
-      WHERE e.month_id = ? AND e.created_by = ?
-      ORDER BY e.created_at DESC
-      LIMIT 10
-    `)
-    .bind(monthId, auth.user_id).all();
+  let recentExpenses;
+  try {
+    recentExpenses = await db
+      .prepare(`
+        ${EXPENSE_SELECT}
+        WHERE e.month_id = ? AND e.created_by = ?
+        ORDER BY e.created_at DESC
+        LIMIT 10
+      `)
+      .bind(monthId, auth.user_id).all();
+  } catch {
+    recentExpenses = await db
+      .prepare(`
+        ${EXPENSE_SELECT_FALLBACK}
+        WHERE e.month_id = ? AND e.created_by = ?
+        ORDER BY e.created_at DESC
+        LIMIT 10
+      `)
+      .bind(monthId, auth.user_id).all();
+  }
 
   return json({
     success: true,

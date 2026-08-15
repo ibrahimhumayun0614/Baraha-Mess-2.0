@@ -152,6 +152,7 @@ export interface MonthSummary {
   member_count: number;
   paid_count: number;
   unpaid_count: number;
+  expenses: Expense[];
 }
 
 export interface CreateMemberRequest {

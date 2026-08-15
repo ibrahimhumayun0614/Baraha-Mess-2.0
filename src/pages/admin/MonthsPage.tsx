@@ -16,10 +16,11 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { api, formatCurrency, formatMonthYear } from '../../lib/api';
-import type { MessMonth, MonthSummary } from '../../types';
+import type { Expense, MessMonth, MonthSummary } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import Dialog from '../../components/ui/Dialog';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import ExpenseHistoryTable from '../../components/expenses/ExpenseHistoryTable';
 
 export default function MonthsPage() {
   const toast = useToast();
@@ -326,6 +327,21 @@ export default function MonthsPage() {
                     {summary?.member_count || 0} members × {formatCurrency(selectedMonth.contribution_amount)} = <strong>{formatCurrency((summary?.member_count || 0) * selectedMonth.contribution_amount)}</strong>
                   </p>
                 </div>
+              </div>
+
+              <div className="card mt-4">
+                <div className="card-header">
+                  <div>
+                    <h3 className="card-title">Expense History</h3>
+                    <p className="card-description">
+                      {(summary?.expenses?.length || 0)} expense{(summary?.expenses?.length || 0) !== 1 ? 's' : ''} in this cycle
+                    </p>
+                  </div>
+                </div>
+                <ExpenseHistoryTable
+                  expenses={(summary?.expenses || []) as Expense[]}
+                  emptyMessage="No expenses recorded for this month"
+                />
               </div>
             </>
           )}

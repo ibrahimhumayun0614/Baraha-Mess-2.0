@@ -1,7 +1,7 @@
 // ============================================
 // /api/dashboard — GET dashboard stats
 // ============================================
-import { json, errorResponse, authenticate, getActiveMonth, EXPENSE_SELECT } from '../_shared';
+import { json, errorResponse, authenticate, getActiveMonth, EXPENSE_SELECT, EXPENSE_SELECT_FALLBACK } from '../_shared';
 
 interface Env {
   DB: D1Database;
@@ -60,14 +60,26 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const dailyAverage = currentDay > 0 ? totalSpent / currentDay : 0;
 
   // Recent expenses
-  const recentExpenses = await db
-    .prepare(`
-      ${EXPENSE_SELECT}
-      WHERE e.month_id = ?
-      ORDER BY e.created_at DESC
-      LIMIT 10
-    `)
-    .bind(monthId).all();
+  let recentExpenses;
+  try {
+    recentExpenses = await db
+      .prepare(`
+        ${EXPENSE_SELECT}
+        WHERE e.month_id = ?
+        ORDER BY e.created_at DESC
+        LIMIT 10
+      `)
+      .bind(monthId).all();
+  } catch {
+    recentExpenses = await db
+      .prepare(`
+        ${EXPENSE_SELECT_FALLBACK}
+        WHERE e.month_id = ?
+        ORDER BY e.created_at DESC
+        LIMIT 10
+      `)
+      .bind(monthId).all();
+  }
 
   return json({
     success: true,

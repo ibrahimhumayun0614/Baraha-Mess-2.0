@@ -1,7 +1,7 @@
 // ============================================
 // /api/months/[id]/summary — GET financial summary
 // ============================================
-import { json, errorResponse, authenticate } from '../../_shared';
+import { json, errorResponse, authenticate, EXPENSE_SELECT, EXPENSE_SELECT_FALLBACK } from '../../_shared';
 
 interface Env {
   DB: D1Database;
@@ -56,6 +56,29 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
     : daysInMonth;
   const dailyAverage = currentDay > 0 ? totalSpent / currentDay : 0;
 
+  let expenses: unknown[] = [];
+  try {
+    const expenseRows = await db
+      .prepare(`
+        ${EXPENSE_SELECT}
+        WHERE e.month_id = ?
+        ORDER BY e.date DESC, e.created_at DESC
+      `)
+      .bind(monthId)
+      .all();
+    expenses = expenseRows.results || [];
+  } catch {
+    const fallback = await db
+      .prepare(`
+        ${EXPENSE_SELECT_FALLBACK}
+        WHERE e.month_id = ?
+        ORDER BY e.date DESC, e.created_at DESC
+      `)
+      .bind(monthId)
+      .all();
+    expenses = fallback.results || [];
+  }
+
   return json({
     success: true,
     data: {
@@ -67,6 +90,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
       member_count: memberCount?.total || 0,
       paid_count: paidCount?.total || 0,
       unpaid_count: unpaidCount?.total || 0,
+      expenses,
     },
   });
 };
