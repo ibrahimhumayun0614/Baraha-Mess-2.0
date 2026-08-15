@@ -1,7 +1,7 @@
 // ============================================
 // /api/expenses — GET all (with filters), POST create
 // ============================================
-import { json, errorResponse, authenticate, logActivity, getActiveMonth, getSearchParams } from '../_shared';
+import { json, errorResponse, authenticate, logActivity, getActiveMonth, getSearchParams, EXPENSE_SELECT } from '../_shared';
 
 interface Env {
   DB: D1Database;
@@ -93,12 +93,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
   // Fetch data
   const dataQuery = `
-    SELECT e.*, 
-      c.name as category_name, c.icon as category_icon,
-      m.name as creator_name
-    FROM expenses e
-    LEFT JOIN expense_categories c ON e.category_id = c.id
-    LEFT JOIN members m ON e.created_by = m.id
+    ${EXPENSE_SELECT}
     ${where}
     ORDER BY ${sortColumn} ${order}
     LIMIT ? OFFSET ?
@@ -157,9 +152,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
     const result = await db
       .prepare(
-        'INSERT INTO expenses (month_id, created_by, amount, date, description, category_id) VALUES (?, ?, ?, ?, ?, ?)'
+        'INSERT INTO expenses (month_id, created_by, amount, date, description, category_id, added_by_type, added_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
       )
-      .bind(activeMonth.id, createdBy, body.amount, body.date, body.description || '', body.category_id)
+      .bind(
+        activeMonth.id,
+        createdBy,
+        body.amount,
+        body.date,
+        body.description || '',
+        body.category_id,
+        auth.user_type,
+        auth.user_id
+      )
       .run();
 
     const forMember =

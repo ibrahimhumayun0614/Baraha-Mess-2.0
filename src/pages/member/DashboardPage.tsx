@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Wallet, ArrowRight } from 'lucide-react';
-import { api, formatCurrency, formatDate, formatMonthYear } from '../../lib/api';
+import { api, formatCurrency, formatDate, formatMonthYear, formatNote, formatPaidBy, formatAddedBy } from '../../lib/api';
 import type { MemberDashboardStats, Expense } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import AddExpenseDialog from '../../components/expenses/AddExpenseDialog';
@@ -144,9 +144,9 @@ export default function MemberDashboardPage() {
                     style={{ padding: '0.625rem 0.5rem', borderBottom: '1px solid var(--border)' }}
                   >
                     <div>
-                      <div className="text-sm font-medium">{expense.description || 'No description'}</div>
+                      <div className="text-sm font-medium">{formatNote(expense.description)}</div>
                       <div className="text-xs text-muted">
-                        {formatDate(expense.date)}
+                        Paid by {formatPaidBy(expense)} · Added by {formatAddedBy(expense)} · {formatDate(expense.date)}
                       </div>
                     </div>
                     <span className="amount">{formatCurrency(expense.amount)}</span>

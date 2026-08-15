@@ -9,7 +9,7 @@ import {
   Receipt,
   ArrowUpDown,
 } from 'lucide-react';
-import { api, formatCurrency, formatDate, buildQueryString } from '../../lib/api';
+import { api, formatCurrency, formatDate, formatNote, formatPaidBy, formatAddedBy, formatPeriod, buildQueryString } from '../../lib/api';
 import type { Expense } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import AddExpenseDialog from '../../components/expenses/AddExpenseDialog';
@@ -127,27 +127,30 @@ export default function MyExpensesPage() {
           <table className="table">
             <thead>
               <tr>
+                <th>Paid By</th>
+                <th>Added By</th>
                 <th className={`sortable ${sortBy === 'date' ? 'sorted' : ''}`} onClick={() => handleSort('date')}>
                   Date <ArrowUpDown size={12} style={{ display: 'inline', marginLeft: '0.25rem' }} />
                 </th>
+                <th>Period</th>
+                <th>Note</th>
                 <th className={`sortable ${sortBy === 'amount' ? 'sorted' : ''}`} onClick={() => handleSort('amount')}>
                   Amount <ArrowUpDown size={12} style={{ display: 'inline', marginLeft: '0.25rem' }} />
                 </th>
-                <th>Description</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 3 }).map((_, j) => (
+                    {Array.from({ length: 6 }).map((_, j) => (
                       <td key={j}><div className="skeleton skeleton-text" style={{ width: '80%' }} /></td>
                     ))}
                   </tr>
                 ))
               ) : expenses.length === 0 ? (
                 <tr>
-                  <td colSpan={3}>
+                  <td colSpan={6}>
                     <div className="empty-state" style={{ padding: '3rem' }}>
                       <div className="empty-state-icon"><Receipt size={24} /></div>
                       <h3 className="empty-state-title">No Expenses</h3>
@@ -167,9 +170,16 @@ export default function MyExpensesPage() {
               ) : (
                 expenses.map((expense) => (
                   <tr key={expense.id}>
+                    <td className="font-medium">{formatPaidBy(expense)}</td>
+                    <td>{formatAddedBy(expense)}</td>
                     <td>{formatDate(expense.date)}</td>
+                    <td>
+                      <span className={`badge ${expense.month_status === 'active' ? 'badge-success' : 'badge-secondary'}`}>
+                        {formatPeriod(expense)}
+                      </span>
+                    </td>
+                    <td className="text-sm">{formatNote(expense.description)}</td>
                     <td className="amount">{formatCurrency(expense.amount)}</td>
-                    <td className="text-sm">{expense.description || '—'}</td>
                   </tr>
                 ))
               )}

@@ -98,3 +98,23 @@ export function getSearchParams(request: Request): URLSearchParams {
   const url = new URL(request.url);
   return url.searchParams;
 }
+
+/** Shared SELECT for expense rows: Paid By, Added By, Period */
+export const EXPENSE_SELECT = `
+  SELECT e.*,
+    c.name as category_name, c.icon as category_icon,
+    m.name as creator_name,
+    mm.month_year,
+    mm.status as month_status,
+    CASE
+      WHEN COALESCE(e.added_by_type, 'member') = 'admin' THEN 'Admin'
+      ELSE COALESCE(adder.name, m.name)
+    END as added_by_name
+  FROM expenses e
+  LEFT JOIN expense_categories c ON e.category_id = c.id
+  LEFT JOIN members m ON e.created_by = m.id
+  LEFT JOIN mess_months mm ON e.month_id = mm.id
+  LEFT JOIN members adder
+    ON COALESCE(e.added_by_type, 'member') = 'member'
+    AND COALESCE(e.added_by_id, e.created_by) = adder.id
+`;

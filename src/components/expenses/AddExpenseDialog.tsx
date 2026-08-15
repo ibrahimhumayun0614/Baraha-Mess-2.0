@@ -78,7 +78,7 @@ export default function AddExpenseDialog({
         : undefined;
 
     if (!createdBy) {
-      toast.error(isMemberMode ? 'Not logged in as a member' : 'Please select who this expense is for');
+      toast.error(isMemberMode ? 'Not logged in as a member' : 'Please select who paid for this expense');
       return;
     }
 
@@ -139,7 +139,7 @@ export default function AddExpenseDialog({
       <form id="add-expense-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         {!isMemberMode && (
           <div className="input-group">
-            <label className="input-label">Expense for (Member) *</label>
+            <label className="input-label">Paid By *</label>
             <Select
               value={form.member_id}
               onChange={(value) => setForm({ ...form, member_id: value })}
@@ -148,12 +148,12 @@ export default function AddExpenseDialog({
                 { value: '', label: 'Select member' },
                 ...members.map((m) => ({
                   value: String(m.id),
-                  label: `${m.name} (${m.member_id})`,
+                  label: m.name,
                 })),
               ]}
             />
             <p className="text-xs text-muted" style={{ marginTop: '0.375rem' }}>
-              Choose yourself or any member this purchase belongs to.
+              The member who paid for this purchase.
             </p>
           </div>
         )}
@@ -186,10 +186,10 @@ export default function AddExpenseDialog({
         </div>
 
         <div className="input-group">
-          <label className="input-label">Description</label>
+          <label className="input-label">Note</label>
           <textarea
             className="textarea"
-            placeholder="e.g. Vegetables and groceries from the market"
+            placeholder="e.g. Groceries, Dinner, Al Shams Super Market"
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             rows={3}

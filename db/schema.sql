@@ -86,6 +86,8 @@ CREATE TABLE IF NOT EXISTS expenses (
   date TEXT NOT NULL DEFAULT (date('now')),
   description TEXT DEFAULT '',
   category_id INTEGER,
+  added_by_type TEXT NOT NULL DEFAULT 'member' CHECK(added_by_type IN ('admin', 'member')),
+  added_by_id INTEGER,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (month_id) REFERENCES mess_months(id) ON DELETE CASCADE,

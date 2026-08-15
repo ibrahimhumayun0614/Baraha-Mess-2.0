@@ -16,7 +16,7 @@ import {
   Calendar,
   Receipt,
 } from 'lucide-react';
-import { api, formatCurrency, formatDate, formatMonthYear } from '../../lib/api';
+import { api, formatCurrency, formatDate, formatMonthYear, formatNote, formatPaidBy, formatAddedBy } from '../../lib/api';
 import type { DashboardStats, Expense, MonthMember } from '../../types';
 import AddExpenseDialog from '../../components/expenses/AddExpenseDialog';
 
@@ -294,9 +294,9 @@ export default function AdminDashboardPage() {
                           {expense.creator_name?.charAt(0) || '?'}
                         </div>
                         <div>
-                          <div className="text-sm font-medium">{expense.description || 'No description'}</div>
+                          <div className="text-sm font-medium">{formatNote(expense.description)}</div>
                           <div className="text-xs text-muted">
-                            {expense.creator_name} · {formatDate(expense.date)}
+                            Paid by {formatPaidBy(expense)} · Added by {formatAddedBy(expense)} · {formatDate(expense.date)}
                           </div>
                         </div>
                       </div>

@@ -11,7 +11,7 @@ import {
   ChevronRight,
   ArrowUpDown,
 } from 'lucide-react';
-import { api, formatCurrency, formatDate, formatDateTime, formatMonthYear, buildQueryString } from '../../lib/api';
+import { api, formatCurrency, formatDate, formatMonthYear, formatNote, formatPaidBy, formatAddedBy, formatPeriod, buildQueryString } from '../../lib/api';
 import type { Expense, Member, MessMonth } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import Dialog from '../../components/ui/Dialog';
@@ -48,6 +48,7 @@ export default function ExpensesPage() {
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [editForm, setEditForm] = useState({
+    member_id: '',
     amount: '',
     date: '',
     description: '',
@@ -138,6 +139,7 @@ export default function ExpensesPage() {
       date: editForm.date,
       description: editForm.description,
       category_id: null,
+      created_by: editForm.member_id ? parseInt(editForm.member_id) : selectedExpense.created_by,
     });
     if (res.success) {
       toast.success('Expense updated');
@@ -166,6 +168,7 @@ export default function ExpensesPage() {
   const openEdit = (expense: Expense) => {
     setSelectedExpense(expense);
     setEditForm({
+      member_id: String(expense.created_by || ''),
       amount: String(expense.amount),
       date: expense.date,
       description: expense.description,
@@ -270,16 +273,16 @@ export default function ExpensesPage() {
           <table className="table">
             <thead>
               <tr>
-                <th>ID</th>
+                <th>Paid By</th>
+                <th>Added By</th>
                 <th className={`sortable ${sortBy === 'date' ? 'sorted' : ''}`} onClick={() => handleSort('date')}>
                   Date <ArrowUpDown size={12} style={{ display: 'inline', marginLeft: '0.25rem' }} />
                 </th>
+                <th>Period</th>
+                <th>Note</th>
                 <th className={`sortable ${sortBy === 'amount' ? 'sorted' : ''}`} onClick={() => handleSort('amount')}>
                   Amount <ArrowUpDown size={12} style={{ display: 'inline', marginLeft: '0.25rem' }} />
                 </th>
-                <th>Description</th>
-                <th>Created By</th>
-                <th>Created At</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -299,19 +302,18 @@ export default function ExpensesPage() {
               ) : (
                 expenses.map((expense) => (
                   <tr key={expense.id}>
-                    <td className="text-muted text-sm">#{expense.id}</td>
+                    <td className="font-medium">{formatPaidBy(expense)}</td>
+                    <td>{formatAddedBy(expense)}</td>
                     <td>{formatDate(expense.date)}</td>
+                    <td>
+                      <span className={`badge ${expense.month_status === 'active' ? 'badge-success' : 'badge-secondary'}`}>
+                        {formatPeriod(expense)}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="text-sm">{formatNote(expense.description)}</span>
+                    </td>
                     <td className="amount">{formatCurrency(expense.amount)}</td>
-                    <td>
-                      <span className="text-sm">{expense.description || '—'}</span>
-                    </td>
-                    <td>
-                      <div className="flex items-center gap-2">
-                        <div className="avatar avatar-sm">{expense.creator_name?.charAt(0) || '?'}</div>
-                        <span className="text-sm">{expense.creator_name}</span>
-                      </div>
-                    </td>
-                    <td className="text-sm text-muted">{formatDateTime(expense.created_at)}</td>
                     <td>
                       <div className="dropdown">
                         <button
@@ -389,13 +391,24 @@ export default function ExpensesPage() {
         footer={
           <>
             <button className="btn btn-outline" onClick={() => setShowEditDialog(false)}>Cancel</button>
-            <button className="btn btn-primary" onClick={handleEdit} disabled={formLoading || !editForm.amount}>
+            <button className="btn btn-primary" onClick={handleEdit} disabled={formLoading || !editForm.amount || !editForm.member_id}>
               {formLoading ? 'Saving...' : 'Save Changes'}
             </button>
           </>
         }
       >
         <form onSubmit={handleEdit} className="flex flex-col gap-4">
+          <div className="input-group">
+            <label className="input-label">Paid By *</label>
+            <Select
+              value={editForm.member_id}
+              onChange={(value) => setEditForm({ ...editForm, member_id: value })}
+              placeholder="Select member"
+              options={members
+                .filter((m) => m.status === 'active' || m.id === selectedExpense?.created_by)
+                .map((m) => ({ value: String(m.id), label: m.name }))}
+            />
+          </div>
           <div className="input-group">
             <label className="input-label">Amount (AED) *</label>
             <input className="input" type="number" step="0.01" min="0" value={editForm.amount} onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })} required />
@@ -405,8 +418,8 @@ export default function ExpensesPage() {
             <input className="input" type="date" value={editForm.date} onChange={(e) => setEditForm({ ...editForm, date: e.target.value })} required />
           </div>
           <div className="input-group">
-            <label className="input-label">Description</label>
-            <textarea className="textarea" placeholder="Describe the expense..." value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+            <label className="input-label">Note</label>
+            <textarea className="textarea" placeholder="e.g. Groceries, Dinner" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
           </div>
         </form>
       </Dialog>
@@ -417,7 +430,7 @@ export default function ExpensesPage() {
         onClose={() => setShowDeleteDialog(false)}
         onConfirm={handleDelete}
         title="Delete Expense"
-        message={`Delete expense #${selectedExpense?.id} for ${selectedExpense ? formatCurrency(selectedExpense.amount) : ''}?`}
+        message={`Delete this expense of ${selectedExpense ? formatCurrency(selectedExpense.amount) : ''} paid by ${selectedExpense ? formatPaidBy(selectedExpense) : ''}?`}
         warning="This action cannot be undone. The monthly balance will be recalculated."
         confirmText="Delete"
         loading={formLoading}

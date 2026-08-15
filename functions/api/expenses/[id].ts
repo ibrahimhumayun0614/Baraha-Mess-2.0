@@ -1,7 +1,7 @@
 // ============================================
 // /api/expenses/[id] — GET, PUT, DELETE single expense
 // ============================================
-import { json, errorResponse, authenticate, logActivity } from '../_shared';
+import { json, errorResponse, authenticate, logActivity, EXPENSE_SELECT } from '../_shared';
 
 interface Env {
   DB: D1Database;
@@ -14,13 +14,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
   if (!auth) return errorResponse('Unauthorized', 401);
 
   const expense = await db
-    .prepare(`
-      SELECT e.*, c.name as category_name, m.name as creator_name
-      FROM expenses e
-      LEFT JOIN expense_categories c ON e.category_id = c.id
-      LEFT JOIN members m ON e.created_by = m.id
-      WHERE e.id = ?
-    `)
+    .prepare(`${EXPENSE_SELECT} WHERE e.id = ?`)
     .bind(params.id)
     .first();
 
@@ -46,18 +40,30 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     date?: string;
     description?: string;
     category_id?: number | null;
+    created_by?: number;
   };
 
   const expense = await db.prepare('SELECT * FROM expenses WHERE id = ?').bind(id).first();
   if (!expense) return errorResponse('Expense not found', 404);
 
+  let createdBy = (expense as { created_by: number }).created_by;
+  if (body.created_by) {
+    const member = await db
+      .prepare("SELECT id FROM members WHERE id = ? AND status = 'active'")
+      .bind(body.created_by)
+      .first<{ id: number }>();
+    if (!member) return errorResponse('Selected member not found or inactive');
+    createdBy = member.id;
+  }
+
   await db
-    .prepare("UPDATE expenses SET amount = ?, date = ?, description = ?, category_id = ?, updated_at = datetime('now') WHERE id = ?")
+    .prepare("UPDATE expenses SET amount = ?, date = ?, description = ?, category_id = ?, created_by = ?, updated_at = datetime('now') WHERE id = ?")
     .bind(
       body.amount ?? (expense as any).amount,
       body.date ?? (expense as any).date,
       body.description ?? (expense as any).description,
       body.category_id !== undefined ? body.category_id : (expense as any).category_id,
+      createdBy,
       id
     )
     .run();

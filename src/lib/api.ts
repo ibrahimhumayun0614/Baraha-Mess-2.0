@@ -109,6 +109,32 @@ export function formatDateTime(dateStr: string): string {
   });
 }
 
+export function formatNote(note?: string | null): string {
+  const value = (note || '').trim();
+  return value || '—';
+}
+
+export function formatPaidBy(expense: { creator_name?: string }): string {
+  return expense.creator_name?.trim() || '—';
+}
+
+export function formatAddedBy(expense: {
+  added_by_type?: 'admin' | 'member' | null;
+  added_by_name?: string;
+  creator_name?: string;
+}): string {
+  if (expense.added_by_type === 'admin' || expense.added_by_name === 'Admin') {
+    return 'Admin';
+  }
+  return expense.added_by_name?.trim() || expense.creator_name?.trim() || '—';
+}
+
+export function formatPeriod(expense: { month_status?: string; month_year?: string }): string {
+  if (expense.month_status === 'active') return 'Current';
+  if (expense.month_year) return formatMonthYear(expense.month_year);
+  return '—';
+}
+
 export function formatMonthYear(monthYear: string): string {
   const [year, month] = monthYear.split('-');
   const date = new Date(parseInt(year), parseInt(month) - 1);

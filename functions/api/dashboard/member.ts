@@ -1,7 +1,7 @@
 // ============================================
 // /api/dashboard/member — GET member-specific dashboard stats
 // ============================================
-import { json, errorResponse, authenticate, getActiveMonth } from '../_shared';
+import { json, errorResponse, authenticate, getActiveMonth, EXPENSE_SELECT } from '../_shared';
 
 interface Env {
   DB: D1Database;
@@ -68,9 +68,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   // My recent expenses
   const recentExpenses = await db
     .prepare(`
-      SELECT e.*, c.name as category_name
-      FROM expenses e
-      LEFT JOIN expense_categories c ON e.category_id = c.id
+      ${EXPENSE_SELECT}
       WHERE e.month_id = ? AND e.created_by = ?
       ORDER BY e.created_at DESC
       LIMIT 10

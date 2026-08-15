@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "db:init": "wrangler d1 execute baraha-mess-db2 --local --file=./db/schema.sql",
+    "db:migrate": "wrangler d1 execute baraha-mess-db2 --remote --file=./db/migrate_expense_added_by.sql",
     "pages:dev": "wrangler pages dev --local --d1=BARAHA_DB=baraha-mess-db2 -- vite"
   },
   "dependencies": {

@@ -68,12 +68,17 @@ export interface Expense {
   date: string;
   description: string;
   category_id: number | null;
+  added_by_type?: 'admin' | 'member' | null;
+  added_by_id?: number | null;
   created_at: string;
   updated_at: string;
   // Joined fields
   category_name?: string;
   category_icon?: string;
   creator_name?: string;
+  added_by_name?: string;
+  month_year?: string;
+  month_status?: 'active' | 'closed';
 }
 
 export interface ActivityLog {
