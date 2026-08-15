@@ -25,21 +25,37 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const body = await request.json() as {
     name: string;
-    member_id: string;
+    member_id?: string;
     phone?: string;
     email?: string;
     contribution_amount?: number;
     monthly_amount?: number;
   };
 
-  if (!body.name || !body.member_id) {
-    return errorResponse('Name and Member ID are required');
+  if (!body.name) {
+    return errorResponse('Name is required');
   }
+
+  const existingIds = await db.prepare('SELECT member_id FROM members').all<{ member_id: string }>();
+  let max = 0;
+  let width = 3;
+  for (const row of existingIds.results || []) {
+    const digits = (row.member_id || '').replace(/\D/g, '');
+    if (!digits) continue;
+    const n = parseInt(digits, 10);
+    if (!Number.isNaN(n) && n > max) {
+      max = n;
+      width = Math.max(width, digits.length);
+    }
+  }
+  const memberCode = (body.member_id && body.member_id.trim())
+    ? body.member_id.trim()
+    : String(max + 1).padStart(width, '0');
 
   try {
     const result = await db
       .prepare('INSERT INTO members (name, member_id, phone, email) VALUES (?, ?, ?, ?)')
-      .bind(body.name, body.member_id, body.phone || '', body.email || '')
+      .bind(body.name, memberCode, body.phone || '', body.email || '')
       .run();
 
     // Auto-add to active month if exists with custom or default contribution amount
@@ -60,7 +76,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         .run();
     }
 
-    await logActivity(db, 'admin', auth.user_id, `Created member "${body.name}" with contribution AED ${memberContribution}`, 'create_member', body.member_id, result.meta.last_row_id as number, 'member');
+    await logActivity(db, 'admin', auth.user_id, `Created member "${body.name}" with contribution AED ${memberContribution}`, 'create_member', memberCode, result.meta.last_row_id as number, 'member');
 
     return json({ success: true, data: { id: result.meta.last_row_id } }, 201);
   } catch (err: any) {

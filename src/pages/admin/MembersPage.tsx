@@ -31,7 +31,6 @@ export default function MembersPage() {
 
   const [form, setForm] = useState({
     name: '',
-    member_id: '',
     monthly_amount: '',
     amount_paid: '',
   });
@@ -74,27 +73,11 @@ export default function MembersPage() {
     return String(fromMonth ?? 500);
   };
 
-  const nextMemberId = () => {
-    let max = 0;
-    let width = 3;
-    for (const member of members) {
-      const digits = (member.member_id || '').replace(/\D/g, '');
-      if (!digits) continue;
-      const n = parseInt(digits, 10);
-      if (!Number.isNaN(n) && n > max) {
-        max = n;
-        width = Math.max(width, digits.length);
-      }
-    }
-    return String(max + 1).padStart(width, '0');
-  };
-
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormLoading(true);
     const res = await api.post<{ id: number }>('/members', {
       name: form.name,
-      member_id: form.member_id,
       phone: '',
       email: '',
       contribution_amount: form.monthly_amount ? parseFloat(form.monthly_amount) : undefined,
@@ -119,7 +102,7 @@ export default function MembersPage() {
       await fetchMembers();
       toast.success('Member created successfully');
       setShowCreateDialog(false);
-      setForm({ name: '', member_id: '', monthly_amount: '', amount_paid: '' });
+      setForm({ name: '', monthly_amount: '', amount_paid: '' });
     } else {
       toast.error(res.error || 'Failed to create member');
     }
@@ -133,7 +116,6 @@ export default function MembersPage() {
 
     const res = await api.put(`/members/${selectedMember.id}`, {
       name: form.name,
-      member_id: form.member_id,
       phone: '',
       email: '',
       contribution_amount: form.monthly_amount ? parseFloat(form.monthly_amount) : undefined,
@@ -188,7 +170,6 @@ export default function MembersPage() {
     setSelectedMonthMember(mm || null);
     setForm({
       name: member.name,
-      member_id: member.member_id,
       monthly_amount: mm ? String(mm.contribution_amount) : defaultMonthlyAmount(),
       amount_paid: '',
     });
@@ -207,8 +188,7 @@ export default function MembersPage() {
       const q = search.toLowerCase();
       const matchesSearch =
         !q ||
-        m.name.toLowerCase().includes(q) ||
-        m.member_id.toLowerCase().includes(q);
+        m.name.toLowerCase().includes(q);
       const matchesStatus = !statusFilter || m.status === statusFilter;
       const mm = getMonthMember(m.id);
       const matchesPayment =
@@ -239,7 +219,6 @@ export default function MembersPage() {
             onClick={() => {
               setForm({
                 name: '',
-                member_id: nextMemberId(),
                 monthly_amount: defaultMonthlyAmount(),
                 amount_paid: '0',
               });
@@ -303,7 +282,6 @@ export default function MembersPage() {
             <thead>
               <tr>
                 <th>Member</th>
-                <th>Member ID</th>
                 <th>Status</th>
                 <th>Monthly Amount</th>
                 <th>Paid</th>
@@ -316,14 +294,14 @@ export default function MembersPage() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
+                    {Array.from({ length: 7 }).map((_, j) => (
                       <td key={j}><div className="skeleton skeleton-text" style={{ width: '80%' }} /></td>
                     ))}
                   </tr>
                 ))
               ) : filteredMembers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="table-empty">
+                  <td colSpan={7} className="table-empty">
                     {hasFilters
                       ? 'No members match your filters'
                       : 'No members yet. Create your first member!'}
@@ -338,7 +316,6 @@ export default function MembersPage() {
                       <td>
                         <div className="font-medium">{member.name}</div>
                       </td>
-                      <td className="text-muted">{member.member_id}</td>
                       <td>
                         <span className={`badge ${member.status === 'active' ? 'badge-success' : 'badge-secondary'}`}>
                           {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
@@ -410,7 +387,7 @@ export default function MembersPage() {
         footer={
           <>
             <button className="btn btn-outline" onClick={() => setShowCreateDialog(false)}>Cancel</button>
-            <button className="btn btn-primary" onClick={handleCreate} disabled={formLoading || !form.name || !form.member_id}>
+            <button className="btn btn-primary" onClick={handleCreate} disabled={formLoading || !form.name}>
               {formLoading ? 'Creating...' : 'Create Member'}
             </button>
           </>
@@ -420,17 +397,6 @@ export default function MembersPage() {
           <div className="input-group">
             <label className="input-label">Full Name *</label>
             <input className="input" placeholder="e.g. Mohamed Ibrahim" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-          </div>
-          <div className="input-group">
-            <label className="input-label">Member ID *</label>
-            <input
-              className="input"
-              placeholder="001"
-              value={form.member_id}
-              onChange={(e) => setForm({ ...form, member_id: e.target.value })}
-              required
-            />
-            <p className="input-helper">Filled automatically with the next available number</p>
           </div>
           <div className="input-group">
             <label className="input-label">Monthly Amount (AED)</label>
@@ -476,10 +442,6 @@ export default function MembersPage() {
           <div className="input-group">
             <label className="input-label">Full Name *</label>
             <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-          </div>
-          <div className="input-group">
-            <label className="input-label">Member ID *</label>
-            <input className="input" value={form.member_id} onChange={(e) => setForm({ ...form, member_id: e.target.value })} required />
           </div>
 
           <div className="input-group">
