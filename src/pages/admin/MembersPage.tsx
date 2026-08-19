@@ -49,6 +49,7 @@ export default function MembersPage() {
 
   const fetchMembers = async () => {
     setLoading(true);
+    const restore = await api.post<{ restored_expenses?: number }>('/members/restore-history', {});
     const res = await api.get<Member[]>('/members');
     if (res.success && res.data) {
       setMembers(res.data);
@@ -62,6 +63,10 @@ export default function MembersPage() {
       setMonthMembers([]);
     }
     setLoading(false);
+    const restored = restore.data?.restored_expenses || 0;
+    if (restored > 0) {
+      toast.success(`Restored ${restored} expense(s) from activity logs`);
+    }
   };
 
   const getMonthMember = (memberId: number): MonthMember | undefined => {
@@ -316,7 +321,7 @@ export default function MembersPage() {
               ) : (
                 filteredMembers.map((member) => {
                   const mm = getMonthMember(member.id);
-                  const pending = mm ? mm.contribution_amount - mm.amount_paid : 0;
+                  const pending = mm ? Math.max(0, mm.contribution_amount - mm.amount_paid) : 0;
                   return (
                     <tr key={member.id}>
                       <td data-label="Member">

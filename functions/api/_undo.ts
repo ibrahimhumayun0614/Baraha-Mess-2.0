@@ -142,33 +142,31 @@ export async function rebuildHistoryFromLogs(
 ): Promise<{ expenses: number; payments: number }> {
   const logs = await loadHistoryLogs(db);
   const name = memberName.trim();
-  let previousId = oldMemberId || null;
+  const oldIds = new Set<number>();
 
-  if (!previousId) {
-    const identityLog = [...logs].reverse().find((log) =>
-      ['delete_member', 'create_member', 'edit_member'].includes(log.action_type)
-      && nameMatchesLog(log.action || '', name)
-      && log.reference_id
-    );
-    previousId = identityLog?.reference_id ? Number(identityLog.reference_id) : null;
+  if (oldMemberId) oldIds.add(Number(oldMemberId));
+
+  for (const log of logs) {
+    if (!['delete_member', 'create_member', 'edit_member'].includes(log.action_type)) continue;
+    if (!nameMatchesLog(log.action || '', name) || !log.reference_id) continue;
+    const id = Number(log.reference_id);
+    if (id && id !== memberId) oldIds.add(id);
   }
 
   const expenseLogs = logs.filter((log) => {
     if (log.action_type !== 'create_expense' || log.undone_at) return false;
     const payload = parsePayload(log.payload);
-    if (payload?.created_by && previousId && Number(payload.created_by) === previousId) return true;
-    if (previousId && String(log.action || '').includes(`for member #${previousId}`)) return true;
-    if (previousId && log.actor_type === 'member' && Number(log.actor_id) === previousId) return true;
+    const action = String(log.action || '');
+    if (payload?.created_by && oldIds.has(Number(payload.created_by))) return true;
+    for (const oldId of oldIds) {
+      if (action.includes(`for member #${oldId}`)) return true;
+      if (log.actor_type === 'member' && Number(log.actor_id) === oldId) return true;
+    }
+    if (action.toLowerCase().includes(name.toLowerCase())) return true;
     return false;
   });
 
-  const paymentLogs = logs.filter((log) => {
-    if (log.action_type !== 'record_payment' || log.undone_at) return false;
-    return nameMatchesLog(log.action || '', name);
-  });
-
   let expensesRestored = 0;
-  let paymentsRestored = 0;
 
   const activeMonth = await db
     .prepare("SELECT id, contribution_amount FROM mess_months WHERE status = 'active' ORDER BY id DESC LIMIT 1")
@@ -207,57 +205,7 @@ export async function rebuildHistoryFromLogs(
     expensesRestored += 1;
   }
 
-  for (const log of paymentLogs) {
-    const payload = parsePayload(log.payload);
-    const amount = Number(payload?.amount ?? extractAmount(log.action || ''));
-    if (!Number.isFinite(amount) || amount <= 0) continue;
-
-    const paymentDate = payload?.payment_date || logDate(log.created_at);
-    const monthYear = paymentDate.slice(0, 7);
-    const month = monthYear
-      ? await db.prepare('SELECT id, contribution_amount FROM mess_months WHERE month_year = ?').bind(monthYear).first<{ id: number; contribution_amount: number }>()
-      : activeMonth;
-    if (!month) continue;
-
-    let mm = await db
-      .prepare('SELECT id, amount_paid, contribution_amount FROM month_members WHERE month_id = ? AND member_id = ?')
-      .bind(month.id, memberId)
-      .first<{ id: number; amount_paid: number; contribution_amount: number }>();
-
-    if (!mm) {
-      const contribution = month.contribution_amount ?? activeMonth?.contribution_amount ?? 0;
-      await db
-        .prepare('INSERT OR IGNORE INTO month_members (month_id, member_id, contribution_amount) VALUES (?, ?, ?)')
-        .bind(month.id, memberId, contribution)
-        .run();
-      mm = await db
-        .prepare('SELECT id, amount_paid, contribution_amount FROM month_members WHERE month_id = ? AND member_id = ?')
-        .bind(month.id, memberId)
-        .first();
-    }
-    if (!mm) continue;
-
-    const duplicate = await db
-      .prepare('SELECT id FROM payments WHERE month_member_id = ? AND amount = ? AND payment_date = ? LIMIT 1')
-      .bind(mm.id, amount, paymentDate)
-      .first();
-    if (duplicate) continue;
-
-    await db
-      .prepare('INSERT INTO payments (month_member_id, amount, payment_date, notes) VALUES (?, ?, ?, ?)')
-      .bind(mm.id, amount, paymentDate, `Restored from activity log #${log.id}`)
-      .run();
-
-    const newPaid = (mm.amount_paid || 0) + amount;
-    const status = paymentStatusFromAmounts(newPaid, mm.contribution_amount);
-    await db
-      .prepare('UPDATE month_members SET amount_paid = ?, payment_status = ? WHERE id = ?')
-      .bind(newPaid, status, mm.id)
-      .run();
-    paymentsRestored += 1;
-  }
-
-  return { expenses: expensesRestored, payments: paymentsRestored };
+  return { expenses: expensesRestored, payments: 0 };
 }
 
 async function restoreDeletedMember(db: D1Database, payload: Record<string, any> | null, action: string): Promise<string> {

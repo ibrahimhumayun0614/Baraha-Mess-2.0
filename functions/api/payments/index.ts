@@ -1,7 +1,7 @@
 // ============================================
 // /api/payments — POST record payment
 // ============================================
-import { json, errorResponse, authenticate, logActivity, paymentStatusFromAmounts } from '../_shared';
+import { json, errorResponse, authenticate, logActivity, paymentStatusFromAmounts, syncPaidFromPayments } from '../_shared';
 
 interface Env {
   DB: D1Database;
@@ -50,14 +50,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     .bind(body.month_member_id, body.amount, body.payment_date || new Date().toISOString().split('T')[0], body.notes || '')
     .run();
 
-  // Update amount_paid and payment_status
-  const newPaid = mm.amount_paid + body.amount;
-  const status = paymentStatusFromAmounts(newPaid, mm.contribution_amount);
-
-  await db
-    .prepare('UPDATE month_members SET amount_paid = ?, payment_status = ? WHERE id = ?')
-    .bind(newPaid, status, body.month_member_id)
-    .run();
+  await syncPaidFromPayments(db);
+  const updated = await db
+    .prepare('SELECT amount_paid, payment_status FROM month_members WHERE id = ?')
+    .bind(body.month_member_id)
+    .first<{ amount_paid: number; payment_status: string }>();
+  const status = updated?.payment_status || paymentStatusFromAmounts((mm.amount_paid || 0) + body.amount, mm.contribution_amount);
 
   await logActivity(
     db, 'admin', auth.user_id,

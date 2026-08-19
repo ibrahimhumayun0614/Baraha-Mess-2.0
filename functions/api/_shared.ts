@@ -111,6 +111,44 @@ export function getSearchParams(request: Request): URLSearchParams {
   return url.searchParams;
 }
 
+/** Recalculate this-month paid totals from actual payment rows. */
+export async function syncPaidFromPayments(db: D1Database, monthId?: number): Promise<void> {
+  try {
+    if (monthId) {
+      await db
+        .prepare(`
+          UPDATE month_members
+          SET amount_paid = COALESCE((
+            SELECT SUM(p.amount) FROM payments p WHERE p.month_member_id = month_members.id
+          ), 0)
+          WHERE month_id = ?
+        `)
+        .bind(monthId)
+        .run();
+    } else {
+      await db
+        .prepare(`
+          UPDATE month_members
+          SET amount_paid = COALESCE((
+            SELECT SUM(p.amount) FROM payments p WHERE p.month_member_id = month_members.id
+          ), 0)
+        `)
+        .run();
+    }
+
+    await db.prepare(`
+      UPDATE month_members
+      SET payment_status = CASE
+        WHEN COALESCE(amount_paid, 0) <= 0 THEN 'unpaid'
+        WHEN amount_paid >= contribution_amount THEN 'paid'
+        ELSE 'partial'
+      END
+    `).run();
+  } catch {
+    // Tables may not exist yet
+  }
+}
+
 /** Paid amount 0 is always unpaid, even if contribution is 0. */
 export function paymentStatusFromAmounts(paid: number, contribution: number): 'paid' | 'partial' | 'unpaid' {
   if (!paid || paid <= 0) return 'unpaid';
@@ -337,6 +375,23 @@ export async function ensureAuthTables(db: D1Database): Promise<void> {
     await db.prepare('ALTER TABLE activity_logs ADD COLUMN undone_at TEXT').run();
   } catch {
     // Column already exists
+  }
+
+  try {
+    await db.prepare("DELETE FROM payments WHERE notes LIKE 'Restored from activity log%'").run();
+  } catch {
+    // Table may not exist yet
+  }
+
+  try {
+    await db.prepare(`
+      UPDATE month_members
+      SET amount_paid = COALESCE((
+        SELECT SUM(p.amount) FROM payments p WHERE p.month_member_id = month_members.id
+      ), 0)
+    `).run();
+  } catch {
+    // Table may not exist yet
   }
 
   try {
