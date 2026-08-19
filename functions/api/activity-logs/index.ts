@@ -16,9 +16,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const search = params.get('search') || '';
   const actionType = params.get('action_type') || '';
   const actorType = params.get('actor_type') || '';
-  const page = parseInt(params.get('page') || '1');
-  const limit = parseInt(params.get('limit') || '30');
-  const offset = (page - 1) * limit;
+  const exportAll = params.get('export') === '1';
+  const page = Math.max(1, parseInt(params.get('page') || '1') || 1);
+  const limit = exportAll
+    ? 10000
+    : Math.min(100, Math.max(1, parseInt(params.get('limit') || '30') || 30));
+  const offset = exportAll ? 0 : (page - 1) * limit;
 
   let where = 'WHERE 1=1';
   const binds: any[] = [];

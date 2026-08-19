@@ -4,7 +4,6 @@
 import { useState, useEffect } from 'react';
 import {
   Search,
-  Filter,
   ChevronLeft,
   ChevronRight,
   LogIn,
@@ -16,10 +15,13 @@ import {
   Trash2,
   Eye,
   Activity,
+  Download,
 } from 'lucide-react';
 import { api, formatDateTime, buildQueryString } from '../../lib/api';
 import type { ActivityLog } from '../../types';
 import Select from '../../components/ui/Select';
+import { useToast } from '../../contexts/ToastContext';
+import { downloadSpreadsheet } from '../../lib/exportSheet';
 
 const ACTION_ICONS: Record<string, typeof LogIn> = {
   login: LogIn,
@@ -49,9 +51,11 @@ const ACTION_COLORS: Record<string, string> = {
 };
 
 export default function ActivityLogsPage() {
+  const toast = useToast();
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [search, setSearch] = useState('');
   const [actionType, setActionType] = useState('');
   const [actorType, setActorType] = useState('');
@@ -82,6 +86,46 @@ export default function ActivityLogsPage() {
     setLoading(false);
   };
 
+  const handleDownloadSheet = async () => {
+    setExporting(true);
+    const query = buildQueryString({
+      search,
+      action_type: actionType,
+      actor_type: actorType,
+      export: '1',
+    });
+    const res = await api.get<ActivityLog[]>(`/activity-logs${query}`);
+    if (!res.success || !res.data) {
+      toast.error(res.error || 'Failed to download logs');
+      setExporting(false);
+      return;
+    }
+    if (res.data.length === 0) {
+      toast.warning('No activity logs to download');
+      setExporting(false);
+      return;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    downloadSpreadsheet(
+      `baraha-activity-logs-${today}.xls`,
+      'Activity Logs',
+      ['Date', 'User Type', 'User', 'Action', 'Action Type', 'Details', 'Reference Type', 'Reference ID'],
+      res.data.map((log) => [
+        formatDateTime(log.created_at),
+        log.actor_type === 'admin' ? 'Admin' : 'Member',
+        log.actor_name || (log.actor_type === 'admin' ? 'Admin' : 'Member'),
+        log.action,
+        log.action_type.replace(/_/g, ' '),
+        log.details || '',
+        log.reference_type || '',
+        log.reference_id ?? '',
+      ])
+    );
+    toast.success(`Downloaded ${res.data.length} log${res.data.length !== 1 ? 's' : ''}`);
+    setExporting(false);
+  };
+
   const totalPages = Math.ceil(total / limit);
 
   return (
@@ -90,6 +134,16 @@ export default function ActivityLogsPage() {
         <div className="page-header-left">
           <h1>Activity Logs</h1>
           <p className="text-sm text-muted">Track all actions performed in the system</p>
+        </div>
+        <div className="page-header-right">
+          <button
+            className="btn btn-outline"
+            onClick={handleDownloadSheet}
+            disabled={exporting || loading || total === 0}
+          >
+            <Download size={16} />
+            {exporting ? 'Downloading...' : 'Download Sheet'}
+          </button>
         </div>
       </div>
 
