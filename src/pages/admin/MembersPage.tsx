@@ -49,7 +49,6 @@ export default function MembersPage() {
 
   const fetchMembers = async () => {
     setLoading(true);
-    const restore = await api.post<{ restored_expenses?: number }>('/members/restore-history', {});
     const res = await api.get<Member[]>('/members');
     if (res.success && res.data) {
       setMembers(res.data);
@@ -63,10 +62,6 @@ export default function MembersPage() {
       setMonthMembers([]);
     }
     setLoading(false);
-    const restored = restore.data?.restored_expenses || 0;
-    if (restored > 0) {
-      toast.success(`Restored ${restored} expense(s) from activity logs`);
-    }
   };
 
   const getMonthMember = (memberId: number): MonthMember | undefined => {
@@ -81,7 +76,7 @@ export default function MembersPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormLoading(true);
-    const res = await api.post<{ id: number; restored_expenses?: number; restored_payments?: number }>('/members', {
+    const res = await api.post<{ id: number }>('/members', {
       name: form.name,
       phone: '',
       email: '',
@@ -105,13 +100,7 @@ export default function MembersPage() {
         }
       }
       await fetchMembers();
-      const restoredExpenses = res.data?.restored_expenses || 0;
-      const restoredPayments = res.data?.restored_payments || 0;
-      if (restoredExpenses || restoredPayments) {
-        toast.success(`Member created. Restored ${restoredExpenses} expense(s) and ${restoredPayments} payment(s) from logs.`);
-      } else {
-        toast.success('Member created successfully');
-      }
+      toast.success('Member created successfully');
       setShowCreateDialog(false);
       setForm({ name: '', monthly_amount: '', amount_paid: '' });
     } else {

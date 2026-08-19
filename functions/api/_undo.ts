@@ -101,113 +101,6 @@ async function insertExpense(db: D1Database, expense: Record<string, any>): Prom
   }
 }
 
-function logDate(createdAt: string | null | undefined): string {
-  return (createdAt || '').replace('T', ' ').slice(0, 10);
-}
-
-async function loadHistoryLogs(db: D1Database): Promise<Array<Record<string, any>>> {
-  try {
-    const res = await db
-      .prepare(`
-        SELECT id, action, action_type, details, actor_type, actor_id, reference_id, payload, created_at, undone_at
-        FROM activity_logs
-        WHERE action_type IN ('create_expense', 'record_payment', 'delete_member', 'create_member', 'edit_member')
-        ORDER BY datetime(created_at) ASC, id ASC
-      `)
-      .all();
-    return (res.results || []) as Array<Record<string, any>>;
-  } catch {
-    const res = await db
-      .prepare(`
-        SELECT id, action, action_type, details, actor_type, actor_id, reference_id, payload, created_at
-        FROM activity_logs
-        WHERE action_type IN ('create_expense', 'record_payment', 'delete_member', 'create_member', 'edit_member')
-        ORDER BY id ASC
-      `)
-      .all();
-    return (res.results || []) as Array<Record<string, any>>;
-  }
-}
-
-function nameMatchesLog(action: string, name: string): boolean {
-  const quoted = new RegExp(`['"]${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`, 'i');
-  return quoted.test(action) || action.toLowerCase().includes(`from ${name.toLowerCase()}`);
-}
-
-export async function rebuildHistoryFromLogs(
-  db: D1Database,
-  memberId: number,
-  memberName: string,
-  oldMemberId?: number | null
-): Promise<{ expenses: number; payments: number }> {
-  const logs = await loadHistoryLogs(db);
-  const name = memberName.trim();
-  const oldIds = new Set<number>();
-
-  if (oldMemberId) oldIds.add(Number(oldMemberId));
-
-  for (const log of logs) {
-    if (!['delete_member', 'create_member', 'edit_member'].includes(log.action_type)) continue;
-    if (!nameMatchesLog(log.action || '', name) || !log.reference_id) continue;
-    const id = Number(log.reference_id);
-    if (id && id !== memberId) oldIds.add(id);
-  }
-
-  const expenseLogs = logs.filter((log) => {
-    if (log.action_type !== 'create_expense' || log.undone_at) return false;
-    const payload = parsePayload(log.payload);
-    const action = String(log.action || '');
-    if (payload?.created_by && oldIds.has(Number(payload.created_by))) return true;
-    for (const oldId of oldIds) {
-      if (action.includes(`for member #${oldId}`)) return true;
-      if (log.actor_type === 'member' && Number(log.actor_id) === oldId) return true;
-    }
-    if (action.toLowerCase().includes(name.toLowerCase())) return true;
-    return false;
-  });
-
-  let expensesRestored = 0;
-
-  const activeMonth = await db
-    .prepare("SELECT id, contribution_amount FROM mess_months WHERE status = 'active' ORDER BY id DESC LIMIT 1")
-    .first<{ id: number; contribution_amount: number }>();
-
-  for (const log of expenseLogs) {
-    const payload = parsePayload(log.payload);
-    const amount = Number(payload?.amount ?? extractAmount(log.action || ''));
-    if (!Number.isFinite(amount) || amount <= 0) continue;
-
-    const date = payload?.date || logDate(log.created_at);
-    const description = (payload?.description ?? log.details ?? '').toString().trim();
-    const monthYear = date.slice(0, 7);
-    const month = monthYear
-      ? await db.prepare('SELECT id FROM mess_months WHERE month_year = ?').bind(monthYear).first<{ id: number }>()
-      : null;
-    const monthId = payload?.month_id || month?.id || activeMonth?.id;
-    if (!monthId) continue;
-
-    const duplicate = await db
-      .prepare('SELECT id FROM expenses WHERE created_by = ? AND amount = ? AND date = ? AND IFNULL(description, \'\') = ? LIMIT 1')
-      .bind(memberId, amount, date, description)
-      .first();
-    if (duplicate) continue;
-
-    await insertExpense(db, {
-      month_id: monthId,
-      created_by: memberId,
-      amount,
-      date,
-      description,
-      category_id: payload?.category_id ?? null,
-      added_by_type: log.actor_type === 'admin' ? 'admin' : 'member',
-      added_by_id: log.actor_id,
-    });
-    expensesRestored += 1;
-  }
-
-  return { expenses: expensesRestored, payments: 0 };
-}
-
 async function restoreDeletedMember(db: D1Database, payload: Record<string, any> | null, action: string): Promise<string> {
   if (payload?.member) {
     const m = payload.member;
@@ -260,15 +153,6 @@ async function restoreDeletedMember(db: D1Database, payload: Record<string, any>
       await insertExpense(db, expense);
     }
 
-    const restoredRow = await db.prepare('SELECT id FROM members WHERE name = ? COLLATE NOCASE ORDER BY id DESC LIMIT 1').bind(m.name).first<{ id: number }>();
-    if (restoredRow) {
-      const history = await rebuildHistoryFromLogs(db, restoredRow.id, m.name, m.id);
-      const extra = history.expenses || history.payments
-        ? ` Restored ${history.expenses} expense(s) and ${history.payments} payment(s) from logs.`
-        : '';
-      return `Restored member "${m.name}".${extra}`;
-    }
-
     return `Restored member "${m.name}"`;
   }
 
@@ -279,10 +163,6 @@ async function restoreDeletedMember(db: D1Database, payload: Record<string, any>
 
   const existing = await db.prepare('SELECT id FROM members WHERE name = ? COLLATE NOCASE').bind(name).first<{ id: number }>();
   if (existing) {
-    const history = await rebuildHistoryFromLogs(db, existing.id, name);
-    if (history.expenses || history.payments) {
-      return `Member "${name}" already exists. Restored ${history.expenses} expense(s) and ${history.payments} payment(s) from logs.`;
-    }
     throw new Error(`Member "${name}" already exists`);
   }
 
@@ -298,8 +178,7 @@ async function restoreDeletedMember(db: D1Database, payload: Record<string, any>
       .bind(activeMonth.id, newId, activeMonth.contribution_amount)
       .run();
   }
-  const history = await rebuildHistoryFromLogs(db, newId, name);
-  return `Restored member "${name}" with ${history.expenses} expense(s) and ${history.payments} payment(s) from logs`;
+  return `Restored member "${name}"`;
 }
 
 async function deleteMemberById(db: D1Database, id: number): Promise<void> {
