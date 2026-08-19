@@ -76,7 +76,7 @@ export default function MembersPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormLoading(true);
-    const res = await api.post<{ id: number }>('/members', {
+    const res = await api.post<{ id: number; restored_expenses?: number; restored_payments?: number }>('/members', {
       name: form.name,
       phone: '',
       email: '',
@@ -100,7 +100,13 @@ export default function MembersPage() {
         }
       }
       await fetchMembers();
-      toast.success('Member created successfully');
+      const restoredExpenses = res.data?.restored_expenses || 0;
+      const restoredPayments = res.data?.restored_payments || 0;
+      if (restoredExpenses || restoredPayments) {
+        toast.success(`Member created. Restored ${restoredExpenses} expense(s) and ${restoredPayments} payment(s) from logs.`);
+      } else {
+        toast.success('Member created successfully');
+      }
       setShowCreateDialog(false);
       setForm({ name: '', monthly_amount: '', amount_paid: '' });
     } else {

@@ -2,6 +2,7 @@
 // /api/members — GET all, POST create
 // ============================================
 import { json, errorResponse, authenticate, logActivity } from '../_shared';
+import { rebuildHistoryFromLogs } from '../_undo';
 
 interface Env {
   DB: D1Database;
@@ -76,14 +77,24 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         .run();
     }
 
-    await logActivity(db, 'admin', auth.user_id, `Created member "${body.name}" with contribution AED ${memberContribution}`, 'create_member', memberCode, result.meta.last_row_id as number, 'member', {
-      id: result.meta.last_row_id,
+    const newId = result.meta.last_row_id as number;
+    const history = await rebuildHistoryFromLogs(db, newId, body.name);
+
+    await logActivity(db, 'admin', auth.user_id, `Created member "${body.name}" with contribution AED ${memberContribution}`, 'create_member', memberCode, newId, 'member', {
+      id: newId,
       name: body.name,
       member_id: memberCode,
       contribution_amount: memberContribution,
     });
 
-    return json({ success: true, data: { id: result.meta.last_row_id } }, 201);
+    return json({
+      success: true,
+      data: {
+        id: newId,
+        restored_expenses: history.expenses,
+        restored_payments: history.payments,
+      },
+    }, 201);
   } catch (err: any) {
     if (err.message?.includes('UNIQUE')) {
       return errorResponse('Member ID already exists');
