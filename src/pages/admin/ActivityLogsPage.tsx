@@ -22,6 +22,7 @@ import type { ActivityLog } from '../../types';
 import Select from '../../components/ui/Select';
 import { useToast } from '../../contexts/ToastContext';
 import { downloadSpreadsheet } from '../../lib/exportSheet';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 
 const ACTION_ICONS: Record<string, typeof LogIn> = {
   login: LogIn,
@@ -60,6 +61,8 @@ export default function ActivityLogsPage() {
   const [actionType, setActionType] = useState('');
   const [actorType, setActorType] = useState('');
   const [page, setPage] = useState(1);
+  const [undoLog, setUndoLog] = useState<ActivityLog | null>(null);
+  const [undoLoading, setUndoLoading] = useState(false);
   const limit = 30;
 
   useEffect(() => {
@@ -124,6 +127,20 @@ export default function ActivityLogsPage() {
     );
     toast.success(`Downloaded ${res.data.length} log${res.data.length !== 1 ? 's' : ''}`);
     setExporting(false);
+  };
+
+  const handleUndo = async () => {
+    if (!undoLog) return;
+    setUndoLoading(true);
+    const res = await api.post(`/activity-logs/${undoLog.id}/undo`, {});
+    if (res.success) {
+      toast.success((res as { message?: string }).message || 'Action undone');
+      setUndoLog(null);
+      await fetchLogs();
+    } else {
+      toast.error(res.error || 'Failed to undo this action');
+    }
+    setUndoLoading(false);
   };
 
   const totalPages = Math.ceil(total / limit);
@@ -216,10 +233,9 @@ export default function ActivityLogsPage() {
             </div>
           ) : (
             logs.map((log) => {
-              const Icon = ACTION_ICONS[log.action_type] || Activity;
               const dotClass = ACTION_COLORS[log.action_type] || '';
               return (
-                <div key={log.id} className="activity-item">
+                <div key={log.id} className={`activity-item${log.undone_at ? ' undone' : ''}`}>
                   <div className={`activity-dot ${dotClass}`} />
                   <div className="activity-content">
                     <div className="activity-text">
@@ -234,8 +250,21 @@ export default function ActivityLogsPage() {
                         {log.action_type.replace(/_/g, ' ')}
                       </span>
                       {formatDateTime(log.created_at)}
+                      {log.undone_at && (
+                        <span className="badge badge-secondary" style={{ fontSize: '0.625rem', padding: '0 0.375rem', marginLeft: '0.5rem' }}>
+                          Undone
+                        </span>
+                      )}
                     </div>
                   </div>
+                  {log.can_undo && !log.undone_at && (
+                    <button
+                      className="btn btn-outline btn-sm activity-undo-btn"
+                      onClick={() => setUndoLog(log)}
+                    >
+                      Undo
+                    </button>
+                  )}
                 </div>
               );
             })
@@ -268,6 +297,17 @@ export default function ActivityLogsPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!undoLog}
+        onClose={() => !undoLoading && setUndoLog(null)}
+        onConfirm={handleUndo}
+        title="Undo this action?"
+        message={undoLog ? `This will reverse: ${undoLog.action}` : ''}
+        warning="The original process will be undone. This cannot be undone again from the same log."
+        confirmText="Undo"
+        loading={undoLoading}
+      />
     </div>
   );
 }

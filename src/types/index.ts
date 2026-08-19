@@ -91,6 +91,8 @@ export interface ActivityLog {
   reference_id: number | null;
   reference_type: string | null;
   created_at: string;
+  undone_at?: string | null;
+  can_undo?: boolean;
   // Joined fields
   actor_name?: string;
 }

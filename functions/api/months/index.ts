@@ -46,6 +46,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   try {
+    const previousActive = await db
+      .prepare("SELECT id FROM mess_months WHERE status = 'active' ORDER BY id DESC LIMIT 1")
+      .first<{ id: number }>();
+
     // Check if this month already exists
     const existingMonth = await db
       .prepare('SELECT id, month_year, status FROM mess_months WHERE month_year = ?')
@@ -94,7 +98,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       db, 'admin', auth.user_id,
       `Started/Reactivated month: ${body.month_year} with AED ${contributionAmount}/person`,
       'start_month', `${activeMembers.results.length} members enrolled`,
-      monthId, 'month'
+      monthId, 'month',
+      {
+        month_id: monthId,
+        previous_active_id: previousActive && previousActive.id !== monthId ? previousActive.id : null,
+        created: !existingMonth,
+        month_year: body.month_year,
+        contribution_amount: contributionAmount,
+      }
     );
 
     return json({ success: true, data: { id: monthId } }, 201);

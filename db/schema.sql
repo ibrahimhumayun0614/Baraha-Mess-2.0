@@ -107,6 +107,8 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   details TEXT DEFAULT '',
   reference_id INTEGER,
   reference_type TEXT,
+  payload TEXT,
+  undone_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

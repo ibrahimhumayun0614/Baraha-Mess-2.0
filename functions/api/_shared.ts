@@ -77,14 +77,25 @@ export async function logActivity(
   actionType: string,
   details = '',
   referenceId: number | null = null,
-  referenceType: string | null = null
+  referenceType: string | null = null,
+  payload: unknown = null
 ): Promise<void> {
-  await db
-    .prepare(
-      'INSERT INTO activity_logs (actor_type, actor_id, action, action_type, details, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    )
-    .bind(actorType, actorId, action, actionType, details, referenceId, referenceType)
-    .run();
+  const payloadJson = payload == null ? null : JSON.stringify(payload);
+  try {
+    await db
+      .prepare(
+        'INSERT INTO activity_logs (actor_type, actor_id, action, action_type, details, reference_id, reference_type, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      )
+      .bind(actorType, actorId, action, actionType, details, referenceId, referenceType, payloadJson)
+      .run();
+  } catch {
+    await db
+      .prepare(
+        'INSERT INTO activity_logs (actor_type, actor_id, action, action_type, details, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      )
+      .bind(actorType, actorId, action, actionType, details, referenceId, referenceType)
+      .run();
+  }
 }
 
 // Get active month
@@ -273,6 +284,8 @@ export async function ensureAuthTables(db: D1Database): Promise<void> {
           details TEXT DEFAULT '',
           reference_id INTEGER,
           reference_type TEXT,
+          payload TEXT,
+          undone_at TEXT,
           created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
       `),
@@ -311,6 +324,17 @@ export async function ensureAuthTables(db: D1Database): Promise<void> {
   }
   try {
     await db.prepare('ALTER TABLE expenses ADD COLUMN added_by_id INTEGER').run();
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    await db.prepare('ALTER TABLE activity_logs ADD COLUMN payload TEXT').run();
+  } catch {
+    // Column already exists
+  }
+  try {
+    await db.prepare('ALTER TABLE activity_logs ADD COLUMN undone_at TEXT').run();
   } catch {
     // Column already exists
   }

@@ -193,7 +193,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       'create_expense',
       body.description || '',
       result.meta.last_row_id as number,
-      'expense'
+      'expense',
+      {
+        id: result.meta.last_row_id,
+        month_id: activeMonth.id,
+        created_by: createdBy,
+        amount: body.amount,
+        date: body.date,
+        description: body.description || '',
+        category_id: body.category_id ?? null,
+      }
     );
 
     return json({ success: true, data: { id: result.meta.last_row_id } }, 201);

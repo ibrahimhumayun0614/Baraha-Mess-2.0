@@ -28,7 +28,11 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
   const id = params.id;
   const body = await request.json() as { contribution_amount?: number; status?: string };
 
-  const month = await db.prepare('SELECT * FROM mess_months WHERE id = ?').bind(id).first<{ month_year: string; status: string }>();
+  const month = await db.prepare('SELECT * FROM mess_months WHERE id = ?').bind(id).first<{
+    month_year: string;
+    status: string;
+    contribution_amount: number;
+  }>();
   if (!month) return errorResponse('Month not found', 404);
 
   // Update contribution amount
@@ -60,7 +64,8 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     await logActivity(
       db, 'admin', auth.user_id,
       `Updated contribution to AED ${body.contribution_amount} for ${month.month_year}`,
-      'update_contribution', '', Number(id), 'month'
+      'update_contribution', '', Number(id), 'month',
+      { month_id: Number(id), previous_amount: month.contribution_amount, new_amount: body.contribution_amount }
     );
   }
 
@@ -74,7 +79,8 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     await logActivity(
       db, 'admin', auth.user_id,
       `Closed month: ${month.month_year}`,
-      'close_month', '', Number(id), 'month'
+      'close_month', '', Number(id), 'month',
+      { month_id: Number(id), previous_status: month.status, month_year: month.month_year }
     );
   } else if (body.status === 'active') {
     const now = new Date();
@@ -103,7 +109,8 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     await logActivity(
       db, 'admin', auth.user_id,
       `Reopened month: ${month.month_year}`,
-      'reopen_month', '', Number(id), 'month'
+      'reopen_month', '', Number(id), 'month',
+      { month_id: Number(id), previous_status: month.status, month_year: month.month_year }
     );
   }
 

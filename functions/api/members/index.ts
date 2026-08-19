@@ -76,7 +76,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         .run();
     }
 
-    await logActivity(db, 'admin', auth.user_id, `Created member "${body.name}" with contribution AED ${memberContribution}`, 'create_member', memberCode, result.meta.last_row_id as number, 'member');
+    await logActivity(db, 'admin', auth.user_id, `Created member "${body.name}" with contribution AED ${memberContribution}`, 'create_member', memberCode, result.meta.last_row_id as number, 'member', {
+      id: result.meta.last_row_id,
+      name: body.name,
+      member_id: memberCode,
+      contribution_amount: memberContribution,
+    });
 
     return json({ success: true, data: { id: result.meta.last_row_id } }, 201);
   } catch (err: any) {

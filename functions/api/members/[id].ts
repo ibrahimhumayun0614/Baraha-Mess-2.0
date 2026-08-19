@@ -40,6 +40,13 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
   const member = await db.prepare('SELECT * FROM members WHERE id = ?').bind(id).first();
   if (!member) return errorResponse('Member not found', 404);
 
+  const activeMonthForSnap = await db
+    .prepare("SELECT id FROM mess_months WHERE status = 'active' ORDER BY id DESC LIMIT 1")
+    .first<{ id: number }>();
+  const beforeMonthMember = activeMonthForSnap
+    ? await db.prepare('SELECT * FROM month_members WHERE month_id = ? AND member_id = ?').bind(activeMonthForSnap.id, id).first()
+    : null;
+
   try {
     await db
       .prepare("UPDATE members SET name = ?, member_id = ?, phone = ?, email = ?, updated_at = datetime('now') WHERE id = ?")
@@ -84,7 +91,11 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
       }
     }
 
-    await logActivity(db, 'admin', auth.user_id, `Updated member "${body.name || (member as any).name}"`, 'edit_member', '', Number(id), 'member');
+    await logActivity(db, 'admin', auth.user_id, `Updated member "${body.name || (member as any).name}"`, 'edit_member', '', Number(id), 'member', {
+      before: member,
+      before_month_member: beforeMonthMember,
+      after: { name: body.name || (member as any).name },
+    });
 
     return json({ success: true });
   } catch (err: any) {
@@ -102,15 +113,30 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
   if (!auth || auth.user_type !== 'admin') return errorResponse('Admin access required', 403);
 
   const id = params.id;
-  const member = await db.prepare('SELECT name FROM members WHERE id = ?').bind(id).first<{ name: string }>();
+  const member = await db.prepare('SELECT * FROM members WHERE id = ?').bind(id).first();
   if (!member) return errorResponse('Member not found', 404);
 
-  const monthMembers = await db
-    .prepare('SELECT id FROM month_members WHERE member_id = ?')
-    .bind(id)
-    .all<{ id: number }>();
+  const monthMembers = await db.prepare('SELECT * FROM month_members WHERE member_id = ?').bind(id).all();
+  const mmRows = (monthMembers.results || []) as Array<{ id: number }>;
+  let payments: unknown[] = [];
+  if (mmRows.length > 0) {
+    const placeholders = mmRows.map(() => '?').join(',');
+    const payRes = await db
+      .prepare(`SELECT * FROM payments WHERE month_member_id IN (${placeholders})`)
+      .bind(...mmRows.map((m) => m.id))
+      .all();
+    payments = payRes.results || [];
+  }
+  const expenseRes = await db.prepare('SELECT * FROM expenses WHERE created_by = ?').bind(id).all();
 
-  for (const mm of monthMembers.results || []) {
+  const snapshot = {
+    member,
+    month_members: monthMembers.results || [],
+    payments,
+    expenses: expenseRes.results || [],
+  };
+
+  for (const mm of mmRows) {
     await db.prepare('DELETE FROM payments WHERE month_member_id = ?').bind(mm.id).run();
   }
 
@@ -119,7 +145,7 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
   await db.prepare("DELETE FROM sessions WHERE user_type = 'member' AND user_id = ?").bind(id).run();
   await db.prepare('DELETE FROM members WHERE id = ?').bind(id).run();
 
-  await logActivity(db, 'admin', auth.user_id, `Deleted member "${member.name}"`, 'delete_member', '', Number(id), 'member');
+  await logActivity(db, 'admin', auth.user_id, `Deleted member "${(member as { name: string }).name}"`, 'delete_member', '', Number(id), 'member', snapshot);
 
   return json({ success: true });
 };

@@ -33,12 +33,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       WHERE mm.id = ?
     `)
     .bind(body.month_member_id)
-    .first<{ id: number; contribution_amount: number; amount_paid: number; member_name: string; member_id: number }>();
+    .first<{
+      id: number;
+      contribution_amount: number;
+      amount_paid: number;
+      payment_status: string;
+      member_name: string;
+      member_id: number;
+    }>();
 
   if (!mm) return errorResponse('Month member record not found', 404);
 
   // Record payment
-  await db
+  const payResult = await db
     .prepare('INSERT INTO payments (month_member_id, amount, payment_date, notes) VALUES (?, ?, ?, ?)')
     .bind(body.month_member_id, body.amount, body.payment_date || new Date().toISOString().split('T')[0], body.notes || '')
     .run();
@@ -58,7 +65,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     'record_payment',
     `Status: ${status}`,
     body.month_member_id,
-    'payment'
+    'payment',
+    {
+      payment_id: payResult.meta.last_row_id,
+      month_member_id: body.month_member_id,
+      amount: body.amount,
+      previous_paid: mm.amount_paid,
+      previous_status: mm.payment_status,
+    }
   );
 
   return json({ success: true });

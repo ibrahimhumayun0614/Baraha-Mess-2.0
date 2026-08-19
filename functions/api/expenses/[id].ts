@@ -72,7 +72,8 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     db, 'admin', auth.user_id,
     `Updated expense #${id}`,
     'edit_expense', `Amount: AED ${body.amount ?? (expense as any).amount}`,
-    Number(id), 'expense'
+    Number(id), 'expense',
+    { before: expense, after: { amount: body.amount, date: body.date, description: body.description, category_id: body.category_id, created_by: createdBy } }
   );
 
   return json({ success: true });
@@ -85,16 +86,17 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
   if (!auth || auth.user_type !== 'admin') return errorResponse('Admin access required', 403);
 
   const id = params.id;
-  const expense = await db.prepare('SELECT amount FROM expenses WHERE id = ?').bind(id).first<{ amount: number }>();
+  const expense = await db.prepare('SELECT * FROM expenses WHERE id = ?').bind(id).first();
   if (!expense) return errorResponse('Expense not found', 404);
 
   await db.prepare('DELETE FROM expenses WHERE id = ?').bind(id).run();
 
   await logActivity(
     db, 'admin', auth.user_id,
-    `Deleted expense #${id} (AED ${expense.amount})`,
+    `Deleted expense #${id} (AED ${(expense as { amount: number }).amount})`,
     'delete_expense', '',
-    Number(id), 'expense'
+    Number(id), 'expense',
+    { expense }
   );
 
   return json({ success: true });

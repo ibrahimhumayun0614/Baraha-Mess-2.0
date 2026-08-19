@@ -2,6 +2,7 @@
 // /api/activity-logs — GET logs with filters
 // ============================================
 import { json, errorResponse, authenticate, getSearchParams } from '../_shared';
+import { logCanUndo } from '../_undo';
 
 interface Env {
   DB: D1Database;
@@ -48,25 +49,54 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     .first<{ total: number }>();
 
   // Fetch with actor names
-  const results = await db
-    .prepare(`
-      SELECT al.*,
-        CASE 
-          WHEN al.actor_type = 'admin' THEN 'Admin'
-          ELSE COALESCE(m.name, 'Unknown')
-        END as actor_name
-      FROM activity_logs al
-      LEFT JOIN members m ON al.actor_type = 'member' AND al.actor_id = m.id
-      ${where}
-      ORDER BY al.created_at DESC
-      LIMIT ? OFFSET ?
-    `)
-    .bind(...binds, limit, offset)
-    .all();
+  let results;
+  try {
+    results = await db
+      .prepare(`
+        SELECT al.id, al.actor_type, al.actor_id, al.action, al.action_type, al.details,
+          al.reference_id, al.reference_type, al.created_at, al.undone_at,
+          CASE WHEN al.payload IS NOT NULL AND al.payload != '' THEN 1 ELSE 0 END as has_payload,
+          CASE 
+            WHEN al.actor_type = 'admin' THEN 'Admin'
+            ELSE COALESCE(m.name, 'Unknown')
+          END as actor_name
+        FROM activity_logs al
+        LEFT JOIN members m ON al.actor_type = 'member' AND al.actor_id = m.id
+        ${where}
+        ORDER BY al.created_at DESC
+        LIMIT ? OFFSET ?
+      `)
+      .bind(...binds, limit, offset)
+      .all();
+  } catch {
+    results = await db
+      .prepare(`
+        SELECT al.*,
+          CASE 
+            WHEN al.actor_type = 'admin' THEN 'Admin'
+            ELSE COALESCE(m.name, 'Unknown')
+          END as actor_name
+        FROM activity_logs al
+        LEFT JOIN members m ON al.actor_type = 'member' AND al.actor_id = m.id
+        ${where}
+        ORDER BY al.created_at DESC
+        LIMIT ? OFFSET ?
+      `)
+      .bind(...binds, limit, offset)
+      .all();
+  }
+
+  const data = (results.results || []).map((row: any) => {
+    const { has_payload, payload, ...rest } = row;
+    return {
+      ...rest,
+      can_undo: logCanUndo({ ...row, has_payload }),
+    };
+  });
 
   return json({
     success: true,
-    data: results.results,
+    data,
     total: countResult?.total || 0,
   });
 };
