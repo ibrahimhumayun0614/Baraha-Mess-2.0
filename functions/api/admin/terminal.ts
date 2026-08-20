@@ -8,7 +8,6 @@ import {
   getActiveMonth,
   logActivity,
   syncPaidFromPayments,
-  paymentStatusFromAmounts,
   EXPENSE_SELECT,
   EXPENSE_SELECT_FALLBACK,
 } from '../_shared';
@@ -86,7 +85,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!rawCommand) {
     return json({
       success: true,
-      lines: [{ text: 'Empty command. Type "help" for a list of available commands.', type: 'muted' }],
+      data: {
+        lines: [{ text: 'Empty command. Type "help" for a list of available commands.', type: 'muted' }],
+      },
     });
   }
 
@@ -129,7 +130,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       lines.push({ text: '    -> Close and lock the current month cycle', type: 'muted' });
       lines.push({ text: '  clear', type: 'info' });
       lines.push({ text: '    -> Clear terminal screen', type: 'muted' });
-      return json({ success: true, lines });
+      return json({ success: true, data: { lines } });
     }
 
     // ----------------------------------------------------
@@ -140,7 +141,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (!activeMonth) {
         lines.push({ text: 'No active month cycle currently running.', type: 'warning' });
         lines.push({ text: 'Type "start month <YYYY-MM> [amount]" to begin a new month.', type: 'muted' });
-        return json({ success: true, lines });
+        return json({ success: true, data: { lines } });
       }
 
       await syncPaidFromPayments(db, activeMonth.id);
@@ -181,7 +182,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         text: `Net Balance:     AED ${balance.toFixed(2)} (${balance >= 0 ? 'Surplus' : 'Deficit'})`,
         type: balance >= 0 ? 'success' : 'error',
       });
-      return json({ success: true, lines });
+      return json({ success: true, data: { lines } });
     }
 
     // ----------------------------------------------------
@@ -216,7 +217,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           type: m.pay_status === 'paid' ? 'success' : m.pay_status === 'partial' ? 'warning' : 'error',
         });
       }
-      return json({ success: true, lines });
+      return json({ success: true, data: { lines } });
     }
 
     // ----------------------------------------------------
@@ -242,7 +243,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           type: 'info',
         });
       }
-      return json({ success: true, lines });
+      return json({ success: true, data: { lines } });
     }
 
     // ----------------------------------------------------
@@ -258,25 +259,25 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         lines.push({ text: 'Error: Missing parameters.', type: 'error' });
         lines.push({ text: 'Syntax: expense <member_name_or_id> <amount> [note] [YYYY-MM-DD]', type: 'warning' });
         lines.push({ text: 'Example: expense Mohamed 45.50 "Groceries & Milk"', type: 'muted' });
-        return json({ success: false, lines });
+        return json({ success: false, data: { lines } });
       }
 
       const amount = parseFloat(amountStr);
       if (isNaN(amount) || amount <= 0) {
         lines.push({ text: `Error: Invalid amount "${amountStr}". Must be positive number.`, type: 'error' });
-        return json({ success: false, lines });
+        return json({ success: false, data: { lines } });
       }
 
       const activeMonth = await getActiveMonth(db);
       if (!activeMonth) {
         lines.push({ text: 'Error: No active month cycle. Start a month cycle first.', type: 'error' });
-        return json({ success: false, lines });
+        return json({ success: false, data: { lines } });
       }
 
       const member = await findMember(db, memberIdent);
       if (!member) {
         lines.push({ text: `Error: Member "${memberIdent}" not found.`, type: 'error' });
-        return json({ success: false, lines });
+        return json({ success: false, data: { lines } });
       }
 
       let note = '';
@@ -330,7 +331,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         type: 'success',
       });
       if (note) lines.push({ text: `  Note: "${note}"`, type: 'muted' });
-      return json({ success: true, lines });
+      return json({ success: true, data: { lines } });
     }
 
     // ----------------------------------------------------
@@ -350,7 +351,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           const member = await findMember(db, memberOrAmount);
           if (!member) {
             lines.push({ text: `Member "${memberOrAmount}" not found.`, type: 'error' });
-            return json({ success: false, lines });
+            return json({ success: false, data: { lines } });
           }
           const exp = await db
             .prepare('SELECT * FROM expenses WHERE created_by = ? ORDER BY date DESC, id DESC LIMIT 1')
@@ -358,7 +359,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
             .first<any>();
           if (!exp) {
             lines.push({ text: `No expenses found for member "${member.name}".`, type: 'error' });
-            return json({ success: false, lines });
+            return json({ success: false, data: { lines } });
           }
           targetExpenseId = exp.id;
           newAmount = parseFloat(amountOnly);
@@ -366,7 +367,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           const exp = await db.prepare('SELECT * FROM expenses ORDER BY id DESC LIMIT 1').first<any>();
           if (!exp) {
             lines.push({ text: 'No expenses found in database.', type: 'error' });
-            return json({ success: false, lines });
+            return json({ success: false, data: { lines } });
           }
           targetExpenseId = exp.id;
           newAmount = parseFloat(memberOrAmount);
@@ -385,13 +386,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         lines.push({ text: 'Syntax: edit last expense [member_name] <new_amount>', type: 'warning' });
         lines.push({ text: 'Syntax: edit expense <expense_id> <new_amount>', type: 'warning' });
         lines.push({ text: 'Example: edit last expense Mohamed 65.00', type: 'muted' });
-        return json({ success: false, lines });
+        return json({ success: false, data: { lines } });
       }
 
       const existingExp = await db.prepare('SELECT * FROM expenses WHERE id = ?').bind(targetExpenseId).first<any>();
       if (!existingExp) {
         lines.push({ text: `Expense #${targetExpenseId} not found.`, type: 'error' });
-        return json({ success: false, lines });
+        return json({ success: false, data: { lines } });
       }
 
       const prevAmount = existingExp.amount;
@@ -416,7 +417,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         text: `✓ Updated expense #${targetExpenseId} amount from AED ${Number(prevAmount).toFixed(2)} -> AED ${newAmount.toFixed(2)}`,
         type: 'success',
       });
-      return json({ success: true, lines });
+      return json({ success: true, data: { lines } });
     }
 
     // ----------------------------------------------------
@@ -432,25 +433,25 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         lines.push({ text: 'Error: Missing parameters.', type: 'error' });
         lines.push({ text: 'Syntax: pay <member_name_or_id> <amount> [date] [note]', type: 'warning' });
         lines.push({ text: 'Example: pay Mohamed 500', type: 'muted' });
-        return json({ success: false, lines });
+        return json({ success: false, data: { lines } });
       }
 
       const amount = parseFloat(amountStr);
       if (isNaN(amount) || amount <= 0) {
         lines.push({ text: `Error: Invalid payment amount "${amountStr}".`, type: 'error' });
-        return json({ success: false, lines });
+        return json({ success: false, data: { lines } });
       }
 
       const activeMonth = await getActiveMonth(db);
       if (!activeMonth) {
         lines.push({ text: 'Error: No active month cycle found.', type: 'error' });
-        return json({ success: false, lines });
+        return json({ success: false, data: { lines } });
       }
 
       const member = await findMember(db, memberIdent);
       if (!member) {
         lines.push({ text: `Member "${memberIdent}" not found.`, type: 'error' });
-        return json({ success: false, lines });
+        return json({ success: false, data: { lines } });
       }
 
       let mm = await db
@@ -512,7 +513,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         text: `  Member Total Paid: AED ${Number(updatedMm?.amount_paid || 0).toFixed(2)} / AED ${updatedMm?.contribution_amount} [${(updatedMm?.payment_status || 'unpaid').toUpperCase()}]`,
         type: 'info',
       });
-      return json({ success: true, lines });
+      return json({ success: true, data: { lines } });
     }
 
     // ----------------------------------------------------
@@ -525,7 +526,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         lines.push({ text: 'Error: Member name required.', type: 'error' });
         lines.push({ text: 'Syntax: add member <name> [monthly_target] [code]', type: 'warning' });
         lines.push({ text: 'Example: add member "Rashid Khan" 500', type: 'muted' });
-        return json({ success: false, lines });
+        return json({ success: false, data: { lines } });
       }
 
       const activeMonth = await getActiveMonth(db);
@@ -562,7 +563,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         text: `✓ Created member #${code} "${name}" with target AED ${targetAmount.toFixed(2)}`,
         type: 'success',
       });
-      return json({ success: true, lines });
+      return json({ success: true, data: { lines } });
     }
 
     // ----------------------------------------------------
@@ -574,13 +575,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (!identifier) {
         lines.push({ text: 'Error: Member identifier required.', type: 'error' });
         lines.push({ text: 'Syntax: delete member <name_or_code>', type: 'warning' });
-        return json({ success: false, lines });
+        return json({ success: false, data: { lines } });
       }
 
       const member = await findMember(db, identifier);
       if (!member) {
         lines.push({ text: `Member "${identifier}" not found.`, type: 'error' });
-        return json({ success: false, lines });
+        return json({ success: false, data: { lines } });
       }
 
       const monthMembers = await db.prepare('SELECT * FROM month_members WHERE member_id = ?').bind(member.id).all<any>();
@@ -622,7 +623,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
       lines.push({ text: `✓ Successfully deleted member "${member.name}" (ID #${member.member_id || member.id}).`, type: 'warning' });
       lines.push({ text: '  All historical payments and expenses backed up in Activity Log (type "undo" to reverse).', type: 'muted' });
-      return json({ success: true, lines });
+      return json({ success: true, data: { lines } });
     }
 
     // ----------------------------------------------------
@@ -635,7 +636,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
       if (!latestLog || !logCanUndo(latestLog)) {
         lines.push({ text: 'No undoable recent actions found in activity log.', type: 'warning' });
-        return json({ success: true, lines });
+        return json({ success: true, data: { lines } });
       }
 
       const undoRes = await undoActivityLog(db, latestLog, auth.user_id);
@@ -645,7 +646,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       } else {
         lines.push({ text: `Undo failed: ${undoRes.error}`, type: 'error' });
       }
-      return json({ success: undoRes.success, lines });
+      return json({ success: undoRes.success, data: { lines } });
     }
 
     // ----------------------------------------------------
@@ -667,7 +668,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
       if (!monthRow) {
         lines.push({ text: 'No month data available to backup.', type: 'error' });
-        return json({ success: false, lines });
+        return json({ success: false, data: { lines } });
       }
 
       await syncPaidFromPayments(db, monthRow.id);
@@ -742,9 +743,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
       return json({
         success: true,
-        action: 'download_backup',
-        backup_data: backupData,
-        lines,
+        data: {
+          action: 'download_backup',
+          backup_data: backupData,
+          lines,
+        },
       });
     }
 
@@ -757,7 +760,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (!monthYear || !/^\d{4}-\d{2}$/.test(monthYear)) {
         lines.push({ text: 'Error: Invalid month format. Expected YYYY-MM.', type: 'error' });
         lines.push({ text: 'Example: start month 2026-09 500', type: 'muted' });
-        return json({ success: false, lines });
+        return json({ success: false, data: { lines } });
       }
 
       await db.prepare("UPDATE mess_months SET status = 'closed', closed_at = datetime('now') WHERE status = 'active'").run();
@@ -780,14 +783,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       await logActivity(db, 'admin', auth.user_id, `Started month: ${monthYear} via Terminal`, 'start_month', '', monthId, 'month');
 
       lines.push({ text: `✓ Started month cycle ${monthYear} with AED ${amount}/person (${activeMembers.results?.length || 0} members enrolled)`, type: 'success' });
-      return json({ success: true, lines });
+      return json({ success: true, data: { lines } });
     }
 
     if (primary === 'close' && secondary === 'month') {
       const activeMonth = await getActiveMonth(db);
       if (!activeMonth) {
         lines.push({ text: 'No active month currently open to close.', type: 'warning' });
-        return json({ success: true, lines });
+        return json({ success: true, data: { lines } });
       }
 
       await db.prepare("UPDATE mess_months SET status = 'closed', closed_at = datetime('now') WHERE id = ?").bind(activeMonth.id).run();
@@ -795,7 +798,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
       lines.push({ text: `✓ Closed month cycle ${activeMonth.month_year}.`, type: 'success' });
       lines.push({ text: '  Type "backup" anytime to download its archived Excel spreadsheet.', type: 'info' });
-      return json({ success: true, lines });
+      return json({ success: true, data: { lines } });
     }
 
     // ----------------------------------------------------
@@ -803,9 +806,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // ----------------------------------------------------
     lines.push({ text: `Command not recognized: "${rawCommand}"`, type: 'error' });
     lines.push({ text: 'Type "help" to see available terminal commands and examples.', type: 'muted' });
-    return json({ success: false, lines });
+    return json({ success: false, data: { lines } });
   } catch (err: any) {
     lines.push({ text: `Terminal Execution Error: ${err?.message || 'Unknown error'}`, type: 'error' });
-    return json({ success: false, lines }, 500);
+    return json({ success: false, data: { lines } }, 500);
   }
 };

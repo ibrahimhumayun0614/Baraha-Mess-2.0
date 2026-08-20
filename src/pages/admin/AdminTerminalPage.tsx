@@ -89,8 +89,12 @@ export default function AdminTerminalPage() {
         backup_data?: any;
       }>('/admin/terminal', { command });
 
-      if (res.data?.lines && Array.isArray(res.data.lines)) {
-        const newLines: TerminalLine[] = res.data.lines.map((l, i) => ({
+      const rawLines = res.data?.lines || (res as any).lines;
+      const action = res.data?.action || (res as any).action;
+      const backupData = res.data?.backup_data || (res as any).backup_data;
+
+      if (rawLines && Array.isArray(rawLines)) {
+        const newLines: TerminalLine[] = rawLines.map((l, i) => ({
           id: `res-${Date.now()}-${i}`,
           text: l.text,
           type: (l.type as any) || 'default',
@@ -101,15 +105,15 @@ export default function AdminTerminalPage() {
           ...prev,
           {
             id: `err-${Date.now()}`,
-            text: res.error || 'Command failed.',
+            text: res.error || 'Command failed to execute.',
             type: 'error',
           },
         ]);
       }
 
       // Handle Excel backup action trigger
-      if (res.data?.action === 'download_backup' && res.data?.backup_data) {
-        exportMonthBackup(res.data.backup_data);
+      if (action === 'download_backup' && backupData) {
+        exportMonthBackup(backupData);
         toast.success('Excel backup spreadsheet downloaded');
       }
     } catch (err: any) {
