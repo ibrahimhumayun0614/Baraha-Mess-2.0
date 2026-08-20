@@ -10,6 +10,7 @@ import MembersPage from './pages/admin/MembersPage';
 import MonthsPage from './pages/admin/MonthsPage';
 import ExpensesPage from './pages/admin/ExpensesPage';
 import ActivityLogsPage from './pages/admin/ActivityLogsPage';
+import AdminTerminalPage from './pages/admin/AdminTerminalPage';
 import MemberDashboardPage from './pages/member/DashboardPage';
 import MyExpensesPage from './pages/member/MyExpensesPage';
 
@@ -55,6 +56,7 @@ export default function App() {
         <Route path="months" element={<MonthsPage />} />
         <Route path="expenses" element={<ExpensesPage />} />
         <Route path="activity" element={<ActivityLogsPage />} />
+        <Route path="terminal" element={<AdminTerminalPage />} />
       </Route>
 
       {/* Member Routes */}

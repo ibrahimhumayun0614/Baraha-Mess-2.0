@@ -13,6 +13,7 @@ import {
   History,
   Home,
   KeyRound,
+  Terminal,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import ChangePasswordModal from '../auth/ChangePasswordModal';
@@ -38,6 +39,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     { to: '/admin/months', icon: Calendar, label: 'Monthly Cycles' },
     { to: '/admin/expenses', icon: Receipt, label: 'Expense History' },
     { to: '/admin/activity', icon: ClipboardList, label: 'Activity Logs' },
+    { to: '/admin/terminal', icon: Terminal, label: 'Terminal / CLI' },
   ];
 
   const memberLinks = [
