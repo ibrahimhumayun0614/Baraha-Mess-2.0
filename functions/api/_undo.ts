@@ -1,7 +1,7 @@
 // ============================================
 // Undo an activity log — reverse the original process
 // ============================================
-import { logActivity, paymentStatusFromAmounts } from './_shared';
+import { logActivity, paymentStatusFromAmounts, syncPaidFromPayments } from './_shared';
 
 type ActivityRow = {
   id: number;
@@ -57,7 +57,7 @@ async function markUndone(db: D1Database, log: ActivityRow, authUserId: number, 
 }
 
 function extractQuotedName(action: string): string | null {
-  const match = action.match(/Deleted member ['"](.+)['"]/i);
+  const match = action.match(/Deleted member ['"]([^'"]+)['"]/i);
   return match?.[1]?.trim() || null;
 }
 
@@ -153,6 +153,8 @@ async function restoreDeletedMember(db: D1Database, payload: Record<string, any>
       await insertExpense(db, expense);
     }
 
+    await syncPaidFromPayments(db);
+
     return `Restored member "${m.name}"`;
   }
 
@@ -178,6 +180,7 @@ async function restoreDeletedMember(db: D1Database, payload: Record<string, any>
       .bind(activeMonth.id, newId, activeMonth.contribution_amount)
       .run();
   }
+  await syncPaidFromPayments(db);
   return `Restored member "${name}"`;
 }
 
@@ -241,9 +244,9 @@ export async function undoActivityLog(
         const monthMemberId = payload?.month_member_id || refId;
         if (!monthMemberId) return { success: false, error: 'Payment reference is missing', status: 400 };
         const mm = await db
-          .prepare('SELECT id, amount_paid, contribution_amount FROM month_members WHERE id = ?')
+          .prepare('SELECT id, month_id, amount_paid, contribution_amount FROM month_members WHERE id = ?')
           .bind(monthMemberId)
-          .first<{ id: number; amount_paid: number; contribution_amount: number }>();
+          .first<{ id: number; month_id: number; amount_paid: number; contribution_amount: number }>();
         if (!mm) return { success: false, error: 'Payment record no longer exists', status: 400 };
 
         let paymentId = payload?.payment_id as number | undefined;
@@ -262,14 +265,7 @@ export async function undoActivityLog(
         }
 
         await db.prepare('DELETE FROM payments WHERE id = ?').bind(paymentId).run();
-        const previousPaid = payload?.previous_paid != null
-          ? Number(payload.previous_paid)
-          : Math.max(0, (mm.amount_paid || 0) - (amount || 0));
-        const status = payload?.previous_status || paymentStatusFromAmounts(previousPaid, mm.contribution_amount);
-        await db
-          .prepare('UPDATE month_members SET amount_paid = ?, payment_status = ? WHERE id = ?')
-          .bind(previousPaid, status, monthMemberId)
-          .run();
+        await syncPaidFromPayments(db, mm.month_id);
         await markUndone(db, log, authUserId, log.action);
         return { success: true, message: 'Payment reversed' };
       }

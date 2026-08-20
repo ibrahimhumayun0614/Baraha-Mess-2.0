@@ -1,7 +1,7 @@
 // ============================================
 // /api/months/[id] — GET, PUT single month
 // ============================================
-import { json, errorResponse, authenticate, logActivity } from '../_shared';
+import { json, errorResponse, authenticate, logActivity, syncPaidFromPayments } from '../_shared';
 
 interface Env {
   DB: D1Database;
@@ -36,30 +36,20 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
   if (!month) return errorResponse('Month not found', 404);
 
   // Update contribution amount
-  if (body.contribution_amount !== undefined) {
+  if (body.contribution_amount !== undefined && !isNaN(Number(body.contribution_amount))) {
+    const newContrib = Number(body.contribution_amount);
     await db
       .prepare('UPDATE mess_months SET contribution_amount = ? WHERE id = ?')
-      .bind(body.contribution_amount, id)
+      .bind(newContrib, id)
       .run();
 
-    // Update all month_members contribution amounts and payment status
+    // Update month_members contribution amounts for members who had the previous default or haven't paid
     await db
-      .prepare('UPDATE month_members SET contribution_amount = ? WHERE month_id = ?')
-      .bind(body.contribution_amount, id)
+      .prepare('UPDATE month_members SET contribution_amount = ? WHERE month_id = ? AND (amount_paid = 0 OR contribution_amount = ?)')
+      .bind(newContrib, id, month.contribution_amount)
       .run();
 
-    await db
-      .prepare(`
-        UPDATE month_members
-        SET payment_status = CASE
-          WHEN COALESCE(amount_paid, 0) <= 0 THEN 'unpaid'
-          WHEN amount_paid >= contribution_amount THEN 'paid'
-          ELSE 'partial'
-        END
-        WHERE month_id = ?
-      `)
-      .bind(id)
-      .run();
+    await syncPaidFromPayments(db, Number(id));
 
     await logActivity(
       db, 'admin', auth.user_id,

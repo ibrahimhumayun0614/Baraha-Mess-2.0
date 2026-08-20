@@ -125,6 +125,19 @@ export async function syncPaidFromPayments(db: D1Database, monthId?: number): Pr
         `)
         .bind(monthId)
         .run();
+
+      await db
+        .prepare(`
+          UPDATE month_members
+          SET payment_status = CASE
+            WHEN COALESCE(amount_paid, 0) <= 0 THEN 'unpaid'
+            WHEN amount_paid >= contribution_amount THEN 'paid'
+            ELSE 'partial'
+          END
+          WHERE month_id = ?
+        `)
+        .bind(monthId)
+        .run();
     } else {
       await db
         .prepare(`
@@ -134,16 +147,16 @@ export async function syncPaidFromPayments(db: D1Database, monthId?: number): Pr
           ), 0)
         `)
         .run();
-    }
 
-    await db.prepare(`
-      UPDATE month_members
-      SET payment_status = CASE
-        WHEN COALESCE(amount_paid, 0) <= 0 THEN 'unpaid'
-        WHEN amount_paid >= contribution_amount THEN 'paid'
-        ELSE 'partial'
-      END
-    `).run();
+      await db.prepare(`
+        UPDATE month_members
+        SET payment_status = CASE
+          WHEN COALESCE(amount_paid, 0) <= 0 THEN 'unpaid'
+          WHEN amount_paid >= contribution_amount THEN 'paid'
+          ELSE 'partial'
+        END
+      `).run();
+    }
   } catch {
     // Tables may not exist yet
   }
@@ -230,6 +243,15 @@ function bytesToHex(bytes: Uint8Array): string {
 
 // Ensure essential tables exist automatically if schema hasn't been executed
 export async function ensureAuthTables(db: D1Database): Promise<void> {
+  try {
+    const check = await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='admins'").first();
+    if (check) {
+      return;
+    }
+  } catch {
+    // Continue to create tables if check fails
+  }
+
   try {
     await db.batch([
       db.prepare(`
@@ -375,38 +397,5 @@ export async function ensureAuthTables(db: D1Database): Promise<void> {
     await db.prepare('ALTER TABLE activity_logs ADD COLUMN undone_at TEXT').run();
   } catch {
     // Column already exists
-  }
-
-  try {
-    await db.prepare("DELETE FROM payments WHERE notes LIKE 'Restored from activity log%'").run();
-  } catch {
-    // Table may not exist yet
-  }
-
-  try {
-    await db.prepare(`
-      UPDATE month_members
-      SET amount_paid = COALESCE((
-        SELECT SUM(p.amount) FROM payments p WHERE p.month_member_id = month_members.id
-      ), 0)
-    `).run();
-  } catch {
-    // Table may not exist yet
-  }
-
-  try {
-    await db.prepare(`
-      UPDATE month_members
-      SET payment_status = CASE
-        WHEN COALESCE(amount_paid, 0) <= 0 THEN 'unpaid'
-        WHEN amount_paid >= contribution_amount THEN 'paid'
-        ELSE 'partial'
-      END
-      WHERE (COALESCE(amount_paid, 0) <= 0 AND payment_status != 'unpaid')
-         OR (amount_paid > 0 AND amount_paid >= contribution_amount AND payment_status != 'paid')
-         OR (amount_paid > 0 AND amount_paid < contribution_amount AND payment_status != 'partial')
-    `).run();
-  } catch {
-    // Table may not exist yet
   }
 }

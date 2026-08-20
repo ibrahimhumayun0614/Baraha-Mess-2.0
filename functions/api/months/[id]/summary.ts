@@ -1,7 +1,7 @@
 // ============================================
 // /api/months/[id]/summary — GET financial summary
 // ============================================
-import { json, errorResponse, authenticate, EXPENSE_SELECT, EXPENSE_SELECT_FALLBACK } from '../../_shared';
+import { json, errorResponse, authenticate, syncPaidFromPayments, EXPENSE_SELECT, EXPENSE_SELECT_FALLBACK } from '../../_shared';
 
 interface Env {
   DB: D1Database;
@@ -16,6 +16,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
 
   const month = await db.prepare('SELECT * FROM mess_months WHERE id = ?').bind(monthId).first();
   if (!month) return errorResponse('Month not found', 404);
+
+  // Sync payments for this month before calculating summary
+  await syncPaidFromPayments(db, Number(monthId));
 
   // Total collected (sum of amount_paid from month_members)
   const collected = await db
@@ -40,10 +43,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
     .bind(monthId)
     .first<{ total: number }>();
 
-  const unpaidCount = await db
-    .prepare("SELECT COUNT(*) as total FROM month_members WHERE month_id = ? AND payment_status != 'paid'")
-    .bind(monthId)
-    .first<{ total: number }>();
+  const unpaidCount = (memberCount?.total || 0) - (paidCount?.total || 0);
 
   // Calculate daily average
   const totalSpent = spent?.total || 0;

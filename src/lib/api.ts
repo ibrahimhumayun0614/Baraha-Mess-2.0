@@ -138,7 +138,10 @@ export function formatDate(dateStr: string): string {
 
 export function formatDateTime(dateStr: string): string {
   if (!dateStr) return '—';
-  const date = new Date(dateStr);
+  const normalized = dateStr.includes(' ') && !dateStr.includes('T')
+    ? dateStr.replace(' ', 'T') + 'Z'
+    : dateStr;
+  const date = new Date(normalized);
   return isNaN(date.getTime()) ? dateStr : dateTimeFormatter.format(date);
 }
 

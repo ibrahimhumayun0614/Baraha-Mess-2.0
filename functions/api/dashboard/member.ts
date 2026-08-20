@@ -1,7 +1,7 @@
 // ============================================
 // /api/dashboard/member — GET member-specific dashboard stats
 // ============================================
-import { json, errorResponse, authenticate, getActiveMonth, EXPENSE_SELECT, EXPENSE_SELECT_FALLBACK } from '../_shared';
+import { json, errorResponse, authenticate, getActiveMonth, syncPaidFromPayments, EXPENSE_SELECT, EXPENSE_SELECT_FALLBACK } from '../_shared';
 
 interface Env {
   DB: D1Database;
@@ -33,6 +33,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const monthId = activeMonth.id;
+
+  // Ensure member payment totals are synced
+  await syncPaidFromPayments(db, monthId);
 
   // Overall stats
   const collected = await db

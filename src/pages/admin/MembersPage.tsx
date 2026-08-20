@@ -129,18 +129,25 @@ export default function MembersPage() {
 
     const payAmount = parseFloat(form.amount_paid || '0') || 0;
 
-    if (selectedMonthMember && payAmount > 0) {
-      const payRes = await api.post('/payments', {
-        month_member_id: selectedMonthMember.id,
-        amount: payAmount,
-        payment_date: new Date().toISOString().split('T')[0],
-        notes: '',
-      });
-      if (!payRes.success) {
-        toast.error(payRes.error || 'Member updated, but payment failed');
-        setFormLoading(false);
-        fetchMembers();
-        return;
+    if (payAmount > 0) {
+      let targetMm = selectedMonthMember;
+      if (!targetMm) {
+        const mmRes = await api.get<MonthMember[]>('/dashboard/members');
+        targetMm = mmRes.data?.find((m) => m.member_id === selectedMember.id) || null;
+      }
+      if (targetMm) {
+        const payRes = await api.post('/payments', {
+          month_member_id: targetMm.id,
+          amount: payAmount,
+          payment_date: new Date().toISOString().split('T')[0],
+          notes: '',
+        });
+        if (!payRes.success) {
+          toast.error(payRes.error || 'Member updated, but payment failed');
+          setFormLoading(false);
+          fetchMembers();
+          return;
+        }
       }
     }
     await fetchMembers();
@@ -188,7 +195,9 @@ export default function MembersPage() {
       const q = search.toLowerCase();
       const matchesSearch =
         !q ||
-        m.name.toLowerCase().includes(q);
+        m.name.toLowerCase().includes(q) ||
+        (m.member_id && m.member_id.toLowerCase().includes(q)) ||
+        (m.phone && m.phone.toLowerCase().includes(q));
       const matchesStatus = !statusFilter || m.status === statusFilter;
       const mm = getMonthMember(m.id);
       const matchesPayment =
