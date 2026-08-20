@@ -79,6 +79,17 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
     expenses = fallback.results || [];
   }
 
+  const membersRes = await db
+    .prepare(`
+      SELECT mm.*, m.name as member_name, m.member_id as member_member_id, m.phone as member_phone
+      FROM month_members mm
+      JOIN members m ON mm.member_id = m.id
+      WHERE mm.month_id = ?
+      ORDER BY m.name ASC
+    `)
+    .bind(monthId)
+    .all();
+
   return json({
     success: true,
     data: {
@@ -89,7 +100,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
       daily_average: Math.round(dailyAverage * 100) / 100,
       member_count: memberCount?.total || 0,
       paid_count: paidCount?.total || 0,
-      unpaid_count: unpaidCount?.total || 0,
+      unpaid_count: unpaidCount || 0,
+      members: membersRes.results || [],
       expenses,
     },
   });

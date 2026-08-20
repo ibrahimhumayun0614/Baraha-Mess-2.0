@@ -14,10 +14,12 @@ import {
   CheckCircle,
   Lock,
   RotateCcw,
+  Download,
 } from 'lucide-react';
 import { api, formatCurrency, formatMonthYear } from '../../lib/api';
 import type { Expense, MessMonth, MonthSummary } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
+import { exportMonthBackup } from '../../lib/exportSheet';
 import Dialog from '../../components/ui/Dialog';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import ExpenseHistoryTable from '../../components/expenses/ExpenseHistoryTable';
@@ -28,6 +30,7 @@ export default function MonthsPage() {
   const [selectedMonth, setSelectedMonth] = useState<MessMonth | null>(null);
   const [summary, setSummary] = useState<MonthSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloadingMonthId, setDownloadingMonthId] = useState<number | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
@@ -72,6 +75,29 @@ export default function MonthsPage() {
     }
   };
 
+  const handleDownloadMonthBackup = async (month: MessMonth) => {
+    setDownloadingMonthId(month.id);
+    try {
+      let dataToExport = summary;
+      if (!dataToExport || selectedMonth?.id !== month.id) {
+        const res = await api.get<MonthSummary>(`/months/${month.id}/summary`);
+        if (res.success && res.data) {
+          dataToExport = res.data;
+        }
+      }
+
+      if (dataToExport) {
+        exportMonthBackup(dataToExport);
+        toast.success(`Downloaded Excel backup for ${formatMonthYear(month.month_year)}`);
+      } else {
+        toast.error('Failed to load month data for backup');
+      }
+    } catch {
+      toast.error('Failed to generate Excel backup');
+    }
+    setDownloadingMonthId(null);
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormLoading(true);
@@ -114,6 +140,14 @@ export default function MonthsPage() {
     if (res.success) {
       toast.success('Month closed successfully');
       setShowCloseDialog(false);
+      // Generate end-of-month backup automatically
+      if (summary && summary.month.id === selectedMonth.id) {
+        exportMonthBackup({
+          ...summary,
+          month: { ...summary.month, status: 'closed' },
+        });
+        toast.info(`Generated end-of-month Excel backup for ${formatMonthYear(selectedMonth.month_year)}`);
+      }
       fetchMonths();
     } else {
       toast.error(res.error || 'Failed to close month');
@@ -165,6 +199,12 @@ export default function MonthsPage() {
       <div className="months-layout">
         {/* Months List */}
         <div className="flex flex-col gap-2 animate-fade-in">
+          <div className="flex items-center justify-between" style={{ padding: '0.25rem 0.5rem 0.5rem' }}>
+            <span className="text-xs text-muted font-medium" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Month Backups & Cycles
+            </span>
+          </div>
+
           {loading ? (
             Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="skeleton" style={{ height: '4.5rem', borderRadius: 'var(--radius-lg)' }} />
@@ -189,9 +229,23 @@ export default function MonthsPage() {
                     {formatCurrency(month.contribution_amount)}/person
                   </div>
                 </div>
-                <span className={`badge ${month.status === 'active' ? 'badge-success' : 'badge-secondary'}`}>
-                  {month.status === 'active' ? 'Active' : 'Closed'}
-                </span>
+                <div className="flex items-center gap-1">
+                  <span className={`badge ${month.status === 'active' ? 'badge-success' : 'badge-secondary'}`}>
+                    {month.status === 'active' ? 'Active' : 'Closed'}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-icon btn-sm"
+                    title="Download Excel Backup"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDownloadMonthBackup(month);
+                    }}
+                    disabled={downloadingMonthId === month.id}
+                  >
+                    <Download size={14} />
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -219,6 +273,15 @@ export default function MonthsPage() {
                     </p>
                   </div>
                   <div className="flex gap-2">
+                    <button
+                      className="btn btn-outline btn-sm"
+                      title="Download Excel Backup"
+                      onClick={() => handleDownloadMonthBackup(selectedMonth)}
+                      disabled={downloadingMonthId === selectedMonth.id}
+                    >
+                      <Download size={14} />
+                      {downloadingMonthId === selectedMonth.id ? 'Exporting...' : 'Excel Backup'}
+                    </button>
                     {selectedMonth.status === 'active' ? (
                       <>
                         <button

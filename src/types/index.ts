@@ -154,6 +154,7 @@ export interface MonthSummary {
   member_count: number;
   paid_count: number;
   unpaid_count: number;
+  members?: MonthMember[];
   expenses: Expense[];
 }
 
